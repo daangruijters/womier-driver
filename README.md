@@ -12,6 +12,11 @@ switches profiles automatically when a game is running.
   Numbers, F-row, Modifiers, Arrows) and set the actuation point, rapid trigger with press/release sensitivity,
   release point and bottom dead zone for the whole selection at once. The keyboard picture shows every key's
   actuation depth; sensitive keys are tinted with your accent colour, rapid-trigger keys carry a dot.
+* **Live view** – switch on *Live* above the keyboard picture and press keys: every tile shows how deep the key
+  is pressed right now (a bar climbing towards the profile's actuation mark) and turns green the moment Windows
+  receives the key. Key presses are read only while the window is open and the toggle is on; nothing is recorded.
+
+  ![Live view](docs/images/live-view.png)
 * **Profiles** – create, duplicate, rename, import/export as JSON. One profile is the *default* and is used
   whenever no game is running.
 * **Game rules** – attach process names (for example `bf6.exe`) to a profile, or pick them from the list of
@@ -27,11 +32,23 @@ switches profiles automatically when a game is running.
 
 ## Requirements
 
-* Windows 10/11 x64 with the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
-  (or publish self-contained, see below).
+* Windows 10/11 x64. The portable release needs nothing else; a framework-dependent build needs the
+  [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 * A Womier SK75 TMR (USB VID `0x3151`, firmware 3.x). Other RY5088-based boards are detected but ignored.
 * The vendor "WOMIER Driver" can stay installed; both can even run at the same time. For predictable results
   let only one of them start with Windows.
+
+## Download and run (no installation)
+
+1. Download `WomierDriver-<version>-win-x64.zip` from the [Releases](../../releases) page.
+2. Extract it anywhere, for example `C:\Tools\WomierDriver`, and start `WomierDriver.exe`. It is one
+   self-contained executable: no installer and no runtime to install. The driver only writes to
+   `%APPDATA%\WomierDriver` (profiles, settings, log) and, if you enable it, the autostart value in the registry.
+3. Windows SmartScreen may warn because the file is not code-signed: choose *More info* → *Run anyway*.
+4. Enable *Start with Windows* in the sidebar once you are happy. The autostart entry points at the folder you
+   chose, so re-enable the toggle after moving the executable.
+
+To update, replace the executable with the one from the newer release; profiles and settings stay in `%APPDATA%`.
 
 ## Build and run
 
@@ -47,9 +64,8 @@ Publish a folder you can copy anywhere (the app then lives wherever you put it; 
 in the sidebar to register that location):
 
 ```powershell
-dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish
-# or, without a runtime dependency (bigger):
-dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish    # portable single exe (what the releases ship)
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish   # small, needs the .NET 10 Desktop Runtime
 ```
 
 ## Using it
@@ -65,6 +81,10 @@ dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true 
    starts or stops; *Automatic (follow games)* in the tray menu returns to rule-based switching immediately.
 5. The *…* menu holds *Set as default*, *Duplicate*, *Read settings from keyboard* (copy what the keyboard holds
    into the profile), *Export* and *Delete*.
+6. **Live** (above the keyboard picture) shows what the keyboard does in real time: a bar in every tile for the
+   current key travel, a tick at the selected profile's actuation point (shown when that profile is the active
+   one) and a green outline while Windows reports the key as pressed. Keys pressed while the window has focus are
+   swallowed so nothing gets typed into the driver by accident; the toggle resets when the window closes.
 
 Settings reference (all in millimetres of key travel, 0.01 mm steps):
 
@@ -85,14 +105,18 @@ dotnet run --project tools/HidProbe                  # list HID interfaces and i
 dotnet run --project tools/HidProbe -- dump          # every key's current settings
 dotnet run --project tools/HidProbe -- set KeyW 1.2  # write one actuation point and read it back
 dotnet run --project tools/HidProbe -- watch         # plug / unplug events
+dotnet run --project tools/HidProbe -- live 30       # print the keyboard's live travel reports for 30 s
+dotnet run --project tools/HidProbe -- travel 10     # poll the live travel table instead, 10 s
 ```
 
 ## How it works
 
 The keyboard exposes a vendor HID collection that accepts 64-byte feature reports. Per-key settings are plain
 tables (128 slots × u16 or u8) that are read in 64-byte chunks and written in 56-byte chunks with a commit
-flag on the last one; the firmware version decides the unit (0.01 mm on current firmware). The protocol was
-recovered from the vendor's Electron application and verified against the keyboard; see
+flag on the last one; the firmware version decides the unit (0.01 mm on current firmware). For the live view the
+keyboard is switched into a reporting mode in which it streams the travel of every moving key (up to about
+1 kHz) on a second HID collection, while Windows' own key events say when a key has actually triggered. The
+protocol was recovered from the vendor's Electron application and verified against the keyboard; see
 [docs/protocol.md](docs/protocol.md). The structure of the code is described in
 [docs/architecture.md](docs/architecture.md), and [CLAUDE.md](CLAUDE.md) has the working rules for the repo.
 
@@ -113,6 +137,8 @@ docs/                    protocol, architecture, reverse-engineering notes and v
 * Advanced vendor key modes (DKS, mod-tap, toggle, snap tap) are reset to "normal" on keys the driver writes.
 * Settings are written to the on-board profile that is active on the keyboard, the same as the vendor software.
 * Top dead zone is only available on firmware 1024 and newer; the SK75 TMR ships with 776 (3.08).
+* In the live view the "pressed" outline comes from Windows, so Fn (which never reaches Windows) and keys
+  remapped in the vendor software do not light up as expected; the depth bar works for every key.
 * The 2.4 GHz receiver path is implemented but has only been verified with the keyboard on its cable.
 
 ## Credits and license

@@ -22,6 +22,7 @@ public sealed class FakeRy5088Device : IFeatureChannel
                  {
                      MagnetismStream.KeyModes, MagnetismStream.Travel, MagnetismStream.LiftTravel, MagnetismStream.FirePressTravel,
                      MagnetismStream.FireLiftTravel, MagnetismStream.DeadZoneTravel, MagnetismStream.TopDeadZoneTravel, MagnetismStream.SwitchBody,
+                     MagnetismStream.LiveTravel,
                  })
         {
             _tables[stream] = new byte[stream.PayloadLength()];
@@ -56,9 +57,20 @@ public sealed class FakeRy5088Device : IFeatureChannel
     /// <summary>When set, writes are acknowledged but the tables never change (simulates a firmware that rejects the data).</summary>
     public bool IgnoreWrites { get; set; }
 
+    /// <summary>Whether the firmware's live travel reports are switched on (<see cref="Opcode.SetMagnetismReport"/>).</summary>
+    public bool LiveReporting { get; private set; }
+
     public ushort[] U16(MagnetismStream stream) => Ry5088Packets.DecodeU16Table(_tables[stream]);
 
     public byte[] U8(MagnetismStream stream) => _tables[stream];
+
+    /// <summary>Sets one slot of a u16 table, e.g. to simulate a key being pressed in <see cref="MagnetismStream.LiveTravel"/>.</summary>
+    public void SetU16(MagnetismStream stream, int slot, ushort value)
+    {
+        var table = _tables[stream];
+        table[slot * 2] = (byte)(value & 0xFF);
+        table[slot * 2 + 1] = (byte)(value >> 8);
+    }
 
     public void Fill(MagnetismStream stream, ushort value)
     {
@@ -116,6 +128,10 @@ public sealed class FakeRy5088Device : IFeatureChannel
             case Opcode.GetProfile:
                 response[0] = Opcode.GetProfile;
                 response[1] = OnboardProfile;
+                return response;
+            case Opcode.SetMagnetismReport:
+                LiveReporting = packet[1] == 1;
+                Array.Copy(packet, response, 8);
                 return response;
             case Opcode.GetMultiMagnetism:
             {

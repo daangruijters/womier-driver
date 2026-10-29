@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
 using WomierDriver.App.Services;
@@ -13,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private readonly AppServices _services;
+    private RawKeyboardInput? _rawInput;
 
     public MainWindow(MainViewModel viewModel, AppServices services)
     {
@@ -22,7 +25,92 @@ public partial class MainWindow : Window
         InitializeComponent();
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
         Loaded += (_, _) => UpdateLegend();
+        _viewModel.LiveViewChanged += on =>
+        {
+            if (on)
+            {
+                Keyboard.ClearFocus();
+            }
+
+            UpdateRawInputRegistration();
+        };
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible)
+            {
+                _viewModel.OnWindowHidden();
+            }
+
+            UpdateRawInputRegistration();
+        };
+        StateChanged += (_, _) => UpdateRawInputRegistration();
     }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+        {
+            _rawInput = new RawKeyboardInput(source);
+            _rawInput.KeyChanged += _viewModel.OnPhysicalKey;
+            UpdateRawInputRegistration();
+        }
+    }
+
+    /// <summary>Raw Input is registered only while the live view is on and the window is actually on screen.</summary>
+    private void UpdateRawInputRegistration()
+    {
+        if (_rawInput is null)
+        {
+            return;
+        }
+
+        var wanted = _viewModel.IsLiveViewEnabled && IsVisible && WindowState != WindowState.Minimized;
+        try
+        {
+            if (wanted)
+            {
+                _rawInput.Register();
+            }
+            else
+            {
+                _rawInput.Unregister();
+            }
+        }
+        catch (Exception ex)
+        {
+            _services.Log.Error("Raw Input registration failed", ex);
+        }
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (ShouldSwallowKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        base.OnPreviewKeyDown(e);
+    }
+
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        if (ShouldSwallowKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        base.OnPreviewKeyUp(e);
+    }
+
+    /// <summary>While the live view is on, key presses are for the keyboard picture, not for the focused control.</summary>
+    private bool ShouldSwallowKey(KeyEventArgs e)
+        => _viewModel.IsLiveViewEnabled
+           && Keyboard.FocusedElement is not TextBoxBase
+           && !Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)
+           && e.Key != Key.System;
 
     /// <summary>Paints the "sensitive … deep" legend with the same colour scale as the keys.</summary>
     private void UpdateLegend()
@@ -58,6 +146,7 @@ public partial class MainWindow : Window
         }
 
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        _rawInput?.Dispose();
         base.OnClosing(e);
     }
 

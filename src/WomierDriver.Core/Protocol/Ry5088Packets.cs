@@ -40,6 +40,9 @@ public static class Ry5088Packets
 
     public static byte[] DongleGetPairedId() => Command(Opcode.DongleGetPairedId);
 
+    /// <summary>Turns the live travel input reports on or off (<c>1B 01</c> / <c>1B 00</c>). The firmware sends no answer.</summary>
+    public static byte[] SetMagnetismReport(bool enabled) => Command(Opcode.SetMagnetismReport, (byte)(enabled ? 1 : 0));
+
     /// <summary>Request one 64-byte chunk of a per-key table.</summary>
     public static byte[] ReadMagnetismChunk(MagnetismStream stream, int chunkIndex)
         => Command(Opcode.GetMultiMagnetism, (byte)stream, 1, checked((byte)chunkIndex));

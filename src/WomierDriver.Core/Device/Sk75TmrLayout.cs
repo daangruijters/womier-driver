@@ -22,6 +22,8 @@ public static partial class Sk75TmrLayout
 
     private static readonly FrozenDictionary<string, KeyDefinition> ByCodeMap = KeyArray.ToFrozenDictionary(k => k.Code, StringComparer.OrdinalIgnoreCase);
 
+    private static readonly FrozenDictionary<byte, KeyDefinition> ByUsageMap = KeyArray.Where(k => k.HidUsage != 0).ToFrozenDictionary(k => k.HidUsage);
+
     /// <summary>All 81 keys, ordered by matrix slot.</summary>
     public static IReadOnlyList<KeyDefinition> Keys => KeyArray;
 
@@ -31,6 +33,9 @@ public static partial class Sk75TmrLayout
     public static KeyDefinition? BySlot(int slot) => BySlotMap.GetValueOrDefault(slot);
 
     public static KeyDefinition? ByCode(string code) => ByCodeMap.GetValueOrDefault(code);
+
+    /// <summary>Key that sends <paramref name="usage"/> in the factory keymap; <c>null</c> for usage 0 (Fn) and usages the board does not have.</summary>
+    public static KeyDefinition? ByHidUsage(byte usage) => ByUsageMap.GetValueOrDefault(usage);
 
     public static IEnumerable<KeyDefinition> InGroup(KeyGroup group) => KeyArray.Where(k => k.IsIn(group));
 }

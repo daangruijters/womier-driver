@@ -31,14 +31,15 @@ public sealed class HidSharpFeatureChannel : IFeatureChannel
     public bool IsOpen => !_disposed;
 
     /// <summary>Opens the device in shared mode so the vendor software can stay running next to this driver.</summary>
-    public static HidSharpFeatureChannel Open(HidDevice device)
+    /// <param name="readDelayMs">Delay between a request and reading its answer; the vendor uses 10 ms for settings and 1 ms when polling travel.</param>
+    public static HidSharpFeatureChannel Open(HidDevice device, int readDelayMs = 10)
     {
         var configuration = new OpenConfiguration();
         configuration.SetOption(OpenOption.Exclusive, false);
         var stream = device.Open(configuration);
         stream.ReadTimeout = 1000;
         stream.WriteTimeout = 1000;
-        return new HidSharpFeatureChannel(device, stream);
+        return new HidSharpFeatureChannel(device, stream) { ReadDelayMs = readDelayMs };
     }
 
     public async Task SendAsync(ReadOnlyMemory<byte> request, ChecksumKind checksum = ChecksumKind.Bit7, CancellationToken cancellationToken = default)

@@ -30,7 +30,7 @@ public sealed class ProfileAppliedEventArgs(Profile profile, ActivationReason re
 /// engine's state lock; the engine snapshots everything it needs under that same lock before touching the
 /// device. Events are raised on thread-pool threads.
 /// </remarks>
-public sealed class DriverEngine : IAsyncDisposable
+public sealed partial class DriverEngine : IAsyncDisposable
 {
     private readonly ProfileLibrary _library;
     private readonly AppSettings _settings;
@@ -179,12 +179,20 @@ public sealed class DriverEngine : IAsyncDisposable
                         continue;
                     }
 
+                    // A previous session may have left the live travel stream on; harmless, but pointless.
+                    await keyboard.SetLiveReportingAsync(false, _lifetime.Token).ConfigureAwait(false);
+
                     _keyboard = keyboard;
                     Keyboard = keyboard.Info;
                     _appliedProfileId = null;
                     _appliedSignature = null;
                     changed = true;
                     _log.Info($"Connected: {keyboard.Info}");
+                    if (_liveRequested)
+                    {
+                        await StartLiveSourceLockedAsync(_lifetime.Token).ConfigureAwait(false);
+                    }
+
                     break;
                 }
                 catch (OperationCanceledException)
@@ -283,6 +291,20 @@ public sealed class DriverEngine : IAsyncDisposable
         catch
         {
             // Dispose must not hang on a stuck device operation.
+        }
+
+        if (_keyboard is not null && _liveSource is not null)
+        {
+            // Best effort: leave the keyboard quiet. _lifetime is already cancelled, so use a token of our own.
+            using var quiet = new CancellationTokenSource(500);
+            try
+            {
+                await _keyboard.SetLiveReportingAsync(false, quiet.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The device may be gone; nothing to do.
+            }
         }
 
         DisposeKeyboard();
@@ -422,8 +444,15 @@ public sealed class DriverEngine : IAsyncDisposable
 
             IsApplying = true;
             RaiseStateChanged();
+            var pauseLive = _liveSource is not null;
             try
             {
+                if (pauseLive)
+                {
+                    // Keep the travel stream quiet while the tables are written and committed.
+                    await keyboard.SetLiveReportingAsync(false, cancellationToken).ConfigureAwait(false);
+                }
+
                 result = await keyboard.WriteKeySettingsAsync(keys, cancellationToken).ConfigureAwait(false);
                 if (result.Success)
                 {
@@ -442,6 +471,17 @@ public sealed class DriverEngine : IAsyncDisposable
             finally
             {
                 IsApplying = false;
+                if (pauseLive && _liveSource is not null && _keyboard is not null)
+                {
+                    try
+                    {
+                        await _keyboard.SetLiveReportingAsync(true, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (IsDeviceFailure(ex))
+                    {
+                        HandleDeviceFailure(ex);
+                    }
+                }
             }
         }
         finally
@@ -464,6 +504,7 @@ public sealed class DriverEngine : IAsyncDisposable
 
     private void DisposeKeyboard()
     {
+        StopLiveSourceLocked();
         _keyboard?.Dispose();
         _keyboard = null;
         Keyboard = null;

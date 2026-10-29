@@ -14,7 +14,8 @@ See [reverse-engineering/README.md](reverse-engineering/README.md) for the prove
 | Product id, 2.4 GHz receiver | `0x5038` |
 | Configuration collection | usage page `0xFFFF`, usage `0x0002`, interface `MI_02` |
 | Report | feature report, report id `0`, 64 data bytes (65 with the id byte) |
-| Other collections | `MI_00` keyboard, `MI_01` consumer/system/keyboard/mouse plus a 32-byte vendor input collection (`0xFFFF`/`0x0001`), not used |
+| Vendor input collection | usage page `0xFFFF`, usage `0x0001`, interface `MI_01` (path `…&mi_01&col05…`), report id 5, 32 data bytes per input report: device notifications and the live travel stream, see §6 |
+| Other collections | `MI_00` keyboard, `MI_01` consumer/system/keyboard/mouse |
 
 The driver opens the configuration collection in shared mode (`HidD_SetFeature` / `HidD_GetFeature`), so the
 vendor software can stay installed and even run at the same time.
@@ -50,11 +51,13 @@ Observed response behaviour:
 | `0x83` | GET_REPORT | query | byte 2 = polling rate code (0 = 8000 Hz … 6 = 125 Hz) |
 | `0xE5` | GET_MULTI_MAGNETISM | query | read one 64-byte chunk of a per-key table, see §4 |
 | `0x65` | SET_MULTI_MAGNETISM | command | write per-key tables, see §4 |
+| `0x1B` | SET_MAGNETISM_REPORT | command | byte 1 = 1 starts / 0 stops the live travel input reports, see §6; no answer |
 | `0xF1` | (receiver) | query | on the 2.4 GHz receiver: bytes 1..2 = id of the paired keyboard; all zeros / `00 00 00 01 01 01 01` when nothing is paired or the keyboard is wired |
 
 The vendor application also implements key remapping (`0x0A`/`0x8A`, `0x10`/`0x90`), lighting (`0x07`, `0x0C`),
 macros, sleep timers and firmware upgrade. Those are documented in the vendor source kept under
-`reverse-engineering/vendor/` and are intentionally **not** touched by this driver.
+`reverse-engineering/vendor/` and are intentionally **not** touched by this driver. The calibration commands
+`0x1C` and `0x1E` are deliberately not implemented at all (§6).
 
 ## 4. Per-key analog tables
 
@@ -127,3 +130,42 @@ Per-key tables are not addressed per on-board profile; writes affect the profile
 
 * Identify + read all managed tables: about 250 ms.
 * Full profile write (6 tables, 28 packets) including commit wait and verification: about 950 ms.
+* Live travel stream: reports 2–3 ms apart while a key moves (up to about 1 kHz); a table-254 sweep takes about
+  42 ms with the 10 ms read delay (23 Hz).
+
+## 6. Live travel reporting (verified on the keyboard, 2026-10-29)
+
+Besides the configuration collection the keyboard has a **vendor input collection** (usage page `0xFFFF`, usage
+`0x0001`, interface `MI_01`, Windows path `…&mi_01&col05…`, report id 5, 32 data bytes). It carries device
+notifications (`0F 01/00` busy start/end, `01` profile changed, `02` report rate, `03` fn layer / OS, `04..0B`
+lighting, `0D` reset, `13` sleep, `1D` magnetism mode; names from the vendor source) and, when enabled, the live
+travel stream. Observed so far: `05 0F 01 00 …` when a profile write is committed and `05 0F 00 00 …` about
+200 ms later, i.e. the firmware is busy for the duration of the flash write.
+
+| Packet (feature report on the configuration collection) | Meaning |
+|---|---|
+| `1B 01 00 00 00 00 00 E3` | start the live travel reports |
+| `1B 00 00 00 00 00 00 E4` | stop them (idempotent) |
+
+While enabled the keyboard sends one input report per key and per change of that key's travel:
+
+```
+byte 0     report id (5)
+byte 1     0x1B
+byte 2..3  travel, u16 LE, same units as the per-key tables (0.01 mm on firmware 776)
+byte 4     matrix slot of the key (same numbering as the per-key tables)
+byte 5..31 always 0
+```
+
+Measured on the SK75 TMR with firmware 776: reports arrive only while a key moves (nothing at rest, nothing after
+`1B 00`), 2–3 ms apart while a key travels, several keys interleaved, every key returns to 0 on release, and
+bottom-out reads 355 (3.55 mm). Normal typing keeps working while the stream is on. The vendor's "simulation test"
+uses this stream but ignores byte 4 and shows the value against the last key that produced a keydown.
+
+Table 254 (`E5 FE 01 <chunk>`, 4 chunks of 64 bytes = 128 × u16 LE, one per slot) holds the same current travel
+per key and is live outside calibration as well (`hidprobe travel`); a full sweep takes about 42 ms with the 10 ms
+read delay. The driver uses the stream.
+
+**Never send `0x1C` (SET_MAGNETISM_CAL) or `0x1E` (SET_MAGNETISM_MAXIMUM_CALIBRATION).** The vendor's calibration
+dialog wraps its table-254 polling in them; they make the firmware re-learn the rest and bottom-out positions of
+every switch, and the vendor tells the user to bottom out every key while they are active.

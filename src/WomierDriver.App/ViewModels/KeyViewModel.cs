@@ -11,12 +11,32 @@ namespace WomierDriver.App.ViewModels;
 public sealed partial class KeyViewModel : ObservableObject
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Fill), nameof(ValueText), nameof(ShowRapidTrigger), nameof(Foreground))]
+    [NotifyPropertyChangedFor(nameof(Fill), nameof(ValueText), nameof(ShowRapidTrigger), nameof(Foreground), nameof(ActuationMarkerMargin))]
     private KeySettings _settings = KeySettings.VendorDefault;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Stroke), nameof(StrokeThickness), nameof(Fill), nameof(Foreground))]
     private bool _isSelected;
+
+    /// <summary>Windows received this key (live view).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Fill), nameof(Foreground), nameof(Stroke), nameof(StrokeThickness), nameof(BarOpacity))]
+    private bool _isPressed;
+
+    /// <summary>Current travel reported by the keyboard (live view).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DepthFraction), nameof(ValueText))]
+    private double _liveDepthMm;
+
+    /// <summary>Whether the live view is on; set on every key at once.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ValueText), nameof(DepthFraction), nameof(ShowActuationMarker), nameof(ValueMargin))]
+    private bool _isLive;
+
+    /// <summary>Whether the actuation marker may be shown (the selected profile is the one active on the keyboard).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowActuationMarker))]
+    private bool _markersEnabled;
 
     public KeyViewModel(KeyDefinition definition)
     {
@@ -45,17 +65,43 @@ public sealed partial class KeyViewModel : ObservableObject
     /// <summary>Upper bound of the actuation range, used to normalize the colour scale.</summary>
     public static double ScaleMax { get; set; } = 3.3;
 
-    public string ValueText => Settings.ActuationMm.ToString("0.00", CultureInfo.InvariantCulture);
+    /// <summary>Travel that fills the live depth bar completely; the firmware reports 3.55 mm for a bottomed-out key.</summary>
+    public const double DepthFullScaleMm = 3.55;
+
+    /// <summary>The profile's actuation point, or the live depth while the live view is on (blank at rest).</summary>
+    public string ValueText => IsLive
+        ? (LiveDepthMm > 0 ? LiveDepthMm.ToString("0.00", CultureInfo.InvariantCulture) : string.Empty)
+        : Settings.ActuationMm.ToString("0.00", CultureInfo.InvariantCulture);
 
     public bool ShowRapidTrigger => Settings.RapidTrigger;
 
-    public Brush Fill => KeyPalette.Fill(Normalized(Settings.ActuationMm), IsSelected);
+    /// <summary>Height of the live depth bar as a fraction of the tile; 0 while the live view is off.</summary>
+    public double DepthFraction => IsLive ? Math.Clamp(LiveDepthMm / DepthFullScaleMm, 0, 1) : 0;
 
-    public Brush Foreground => KeyPalette.Foreground(Normalized(Settings.ActuationMm), IsSelected);
+    /// <summary>Places the actuation marker where the depth bar reaches the profile's actuation point.</summary>
+    public Thickness ActuationMarkerMargin => new(0, 1 + (1 - Math.Clamp(Settings.ActuationMm / DepthFullScaleMm, 0, 1)) * (Height - 2), 0, 0);
 
-    public Brush Stroke => IsSelected ? KeyPalette.SelectedStroke : KeyPalette.Stroke;
+    public bool ShowActuationMarker => IsLive && MarkersEnabled;
 
-    public Thickness StrokeThickness => IsSelected ? new Thickness(2) : new Thickness(1);
+    /// <summary>The value text moves left of the actuation tick while the live view is on.</summary>
+    public Thickness ValueMargin => IsLive ? new Thickness(0, 0, 12, 2) : new Thickness(0, 0, 3, 2);
+
+    public double BarOpacity => IsPressed ? 0.5 : 0.28;
+
+    public Brush Fill => KeyPalette.Fill(IsPressed ? 0 : Normalized(Settings.ActuationMm), IsSelected);
+
+    public Brush Foreground => KeyPalette.Foreground(IsPressed ? 0 : Normalized(Settings.ActuationMm), IsSelected);
+
+    public Brush Stroke => IsPressed ? KeyPalette.PressedStroke : IsSelected ? KeyPalette.SelectedStroke : KeyPalette.Stroke;
+
+    public Thickness StrokeThickness => IsPressed || IsSelected ? new Thickness(2) : new Thickness(1);
+
+    /// <summary>Clears depth and pressed state when the live view is switched off.</summary>
+    public void ResetLive()
+    {
+        LiveDepthMm = 0;
+        IsPressed = false;
+    }
 
     /// <summary>Re-reads theme brushes (after a light/dark switch) and refreshes the visuals.</summary>
     public void RefreshVisuals()
@@ -90,6 +136,9 @@ public static class KeyPalette
     public static Brush Stroke => Resource("ControlStrokeColorDefaultBrush");
 
     public static Brush SelectedStroke => Resource("AccentFillColorDefaultBrush");
+
+    /// <summary>Outline of a key that Windows currently reports as pressed (live view).</summary>
+    public static Brush PressedStroke => Resource("SystemFillColorSuccessBrush");
 
     /// <summary>Forget cached theme colours; call when the system theme changes.</summary>
     public static void Invalidate()

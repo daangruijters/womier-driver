@@ -44,6 +44,12 @@ public enum MagnetismStream : byte
 
     /// <summary>u8 per key: installed switch type code (read-only for this driver).</summary>
     SwitchBody = 252,
+
+    /// <summary>
+    /// u16 per key, read-only: the key's current travel in travel units (the "travel value" the vendor's calibration
+    /// dialog polls). See docs/protocol.md for how live it is outside calibration.
+    /// </summary>
+    LiveTravel = 254,
 }
 
 public static class MagnetismStreams
@@ -63,10 +69,14 @@ public static class MagnetismStreams
     public static int ElementSize(this MagnetismStream stream) => stream switch
     {
         MagnetismStream.Travel or MagnetismStream.LiftTravel or MagnetismStream.FirePressTravel
-            or MagnetismStream.FireLiftTravel or MagnetismStream.DynamicTravel or MagnetismStream.DeadZoneTravel => 2,
+            or MagnetismStream.FireLiftTravel or MagnetismStream.DynamicTravel or MagnetismStream.DeadZoneTravel
+            or MagnetismStream.LiveTravel => 2,
         MagnetismStream.TriggerModes or MagnetismStream.DksData => 4,
         _ => 1,
     };
+
+    /// <summary>Tables the firmware only reports; <see cref="Device.Sk75Keyboard.WriteTableAsync"/> refuses to write them.</summary>
+    public static bool IsReadOnly(this MagnetismStream stream) => stream is MagnetismStream.SwitchBody or MagnetismStream.LiveTravel;
 
     /// <summary>Total payload length of the table (128 keys times the element size).</summary>
     public static int PayloadLength(this MagnetismStream stream) => SlotCount * stream.ElementSize();

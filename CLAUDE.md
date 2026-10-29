@@ -12,8 +12,10 @@ feature reports; no vendor binaries are used.
 ## Layout
 
 ```
-src/WomierDriver.Core/    protocol, HID transport, device model, profiles, automation engine (no UI, unit tested)
-src/WomierDriver.App/     WPF app: tray icon, main window, view models (Fluent theme, CommunityToolkit.Mvvm)
+src/WomierDriver.Core/    protocol, HID transport (feature + input reports), device model, profiles, automation engine,
+                          live travel stream (no UI, no Win32, unit tested)
+src/WomierDriver.App/     WPF app: tray icon, main window, view models, Raw Input for the live view (Fluent theme,
+                          CommunityToolkit.Mvvm)
 src/WomierDriver.Tests/   xunit tests incl. FakeRy5088Device, an in-memory firmware for end-to-end tests
 tools/HidProbe/           console diagnostics against the real keyboard (info, dump, raw, set, fill, watch)
 tools/gen-layout.py       regenerates Core/Device/Sk75TmrLayout.Keys.cs from docs/reverse-engineering/vendor
@@ -29,7 +31,9 @@ dotnet build WomierDriver.slnx                      # build everything (solution
 dotnet test src/WomierDriver.Tests                  # unit tests (no hardware needed)
 dotnet run --project src/WomierDriver.App           # run the driver (add -- --minimized to start in the tray)
 dotnet run --project tools/HidProbe -- dump         # read every key's current settings from the keyboard
-dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish
+dotnet run --project tools/HidProbe -- live 30      # print the firmware's live travel reports for 30 s
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish   # portable single exe (releases)
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish  # small, needs the runtime
 python tools/gen-layout.py                          # regenerate the key table after changing the vendor data
 ```
 
@@ -47,6 +51,11 @@ keyboard, so do not let them apply different profiles at the same time.
   firmware. Travel units depend on the firmware version (`TravelScale.ForFirmware`); never hard-code 100.
 * **Only slots with a physical key are patched** when writing; the other 47 table entries are read first and
   written back unchanged.
+* **Live view.** Never send the calibration opcodes `0x1C` / `0x1E` (they re-learn the switch calibration; they
+  are deliberately absent from `Opcode`). The travel stream (`0x1B`) is owned by the engine: paused around every
+  write, switched off on connect and dispose, dropped synchronously under the device gate when the keyboard goes
+  away. Raw Input lives in the App project only, is registered only while the live view is on and the window is
+  visible, and key events are never logged or stored.
 * **Threading.** The engine is the only owner of the device. Mutate profiles via `DriverEngine.MutateLibrary`
   (takes the engine lock) and let the engine re-evaluate; never write to `Profile` objects from a background
   thread. UI updates from engine events must be marshalled with `Dispatcher.BeginInvoke`.
@@ -70,3 +79,9 @@ keyboard, so do not let them apply different profiles at the same time.
 * `Process.GetProcesses()` is polled every 2 s; process names are matched case-insensitively with `.exe` appended.
 * WPF popups (`ToolTip`, `ContextMenu`) inherit `FontFamily` and `FontSize` from the element that owns them. Never
   set an icon font on a `Button` itself; `IconButtonStyle` applies it to the glyph through a `ContentTemplate`.
+* The vendor input collection (`MI_01&Col05`, usage `0xFFFF/0x0001`) is a separate HID device object whose path
+  does not reveal its parent; it is matched to the keyboard by product id. HidSharp read timeouts surface as
+  `TimeoutException` (idle), anything else from `Read` means the device is gone. `WM_INPUT` must not be marked
+  handled, and Raw Input reports injected input with a zero device handle (ignored).
+* Enumerating HID devices with descriptor reads takes about a second; never do it on the UI thread
+  (`SetLiveViewAsync` is called through `Task.Run`).

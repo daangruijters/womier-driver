@@ -12,6 +12,16 @@ public static class Opcode
     public const byte SetProfile = 0x04;
     public const byte SetKeyMatrix = 0x0A;
     public const byte SetFn = 0x10;
+
+    /// <summary>
+    /// Turns the firmware's live travel reports on (byte 1 = 1) or off (0). While on, the keyboard sends
+    /// <see cref="VendorInputReports.Travel"/> input reports on its vendor input collection.
+    /// </summary>
+    public const byte SetMagnetismReport = 0x1B;
+
+    // 0x1C (SET_MAGNETISM_CAL) and 0x1E (SET_MAGNETISM_MAXIMUM_CALIBRATION) re-learn the switch calibration and are
+    // deliberately not defined here. See docs/protocol.md.
+
     public const byte SetMultiMagnetism = 0x65;
 
     public const byte GetRfVersion = 0x80;

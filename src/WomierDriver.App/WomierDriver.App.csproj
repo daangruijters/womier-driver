@@ -11,6 +11,10 @@
     <!-- WPF0001: the Fluent ThemeMode API is still marked experimental. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <Description>System-tray driver and configuration utility for the Womier SK75 TMR keyboard.</Description>
+    <!-- Publishing produces one executable; published self-contained it is the portable build the releases ship. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>

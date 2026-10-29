@@ -227,11 +227,33 @@ public sealed class Sk75Keyboard : IDisposable
     }
 
     /// <summary>
+    /// Switches the firmware's live travel reports (input reports on the vendor input collection) on or off with
+    /// <c>1B 01</c> / <c>1B 00</c>. The firmware does not answer, so this only waits briefly like the vendor software.
+    /// </summary>
+    public async Task SetLiveReportingAsync(bool enabled, CancellationToken cancellationToken = default)
+    {
+        await _channel.SendAsync(Ry5088Packets.SetMagnetismReport(enabled), cancellationToken: cancellationToken).ConfigureAwait(false);
+        await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads table 254 (current travel per matrix slot, in raw travel units). Never sends the calibration commands
+    /// the vendor software wraps around this read.
+    /// </summary>
+    public async Task<ushort[]> ReadLiveTravelAsync(CancellationToken cancellationToken = default)
+        => Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.LiveTravel, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>
     /// Low-level: writes one complete per-key table as-is and commits it. Meant for diagnostics and recovery
     /// (<c>hidprobe fill</c>); the profile machinery uses <see cref="WriteKeySettingsAsync"/>.
     /// </summary>
     public async Task WriteTableAsync(MagnetismStream stream, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
     {
+        if (stream.IsReadOnly())
+        {
+            throw new ArgumentException($"Table {stream} is read-only.", nameof(stream));
+        }
+
         foreach (var packet in Ry5088Packets.WriteMagnetismTable(stream, payload.Span, commitAtEnd: true))
         {
             await _channel.SendAsync(packet, cancellationToken: cancellationToken).ConfigureAwait(false);

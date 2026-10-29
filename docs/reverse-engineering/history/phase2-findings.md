@@ -75,6 +75,11 @@ enumerated as two HID interfaces:
   media-keys / consumer-control report (confusingly named "DangleCommon"
   even though the keyboard is wired; the protocol is shared with dongles).
 
+> **Correction (2026-10-29):** the roles are the other way round. `MI_02` (usage page `0xFFFF`, usage 2) is the
+> configuration collection that takes the 64-byte feature reports, and `MI_01&Col05` (usage 1) is the 32-byte
+> **input** collection that carries device notifications and the live travel stream. The paths above are the
+> 2.4 GHz receiver's; the wired keyboard (`PID_5030`) has the same pair. See `docs/protocol.md` §1 and §6.
+
 Neither `0x3151:0x5038` appears in the WebHID-fallback `PR` VID/PID table
 from `autoConnect`. **This kills any plan to bypass `iot_driver.exe`
 for this keyboard.** Reusing the native daemon is the only path.

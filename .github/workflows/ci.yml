@@ -19,9 +19,9 @@ jobs:
         run: dotnet build WomierDriver.slnx -c Release --no-restore
       - name: Test
         run: dotnet test src/WomierDriver.Tests -c Release --no-build --logger "trx;LogFileName=tests.trx"
-      - name: Publish app
-        run: dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish
+      - name: Publish portable app
+        run: dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish
       - uses: actions/upload-artifact@v4
         with:
-          name: WomierDriver-win-x64
-          path: publish
+          name: WomierDriver-win-x64-portable
+          path: publish/WomierDriver.exe

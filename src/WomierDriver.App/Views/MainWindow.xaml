@@ -161,10 +161,18 @@
                   <Button Content="None" Style="{StaticResource ChipButtonStyle}" Command="{Binding SelectGroupCommand}" CommandParameter="None" />
                 </WrapPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                  <TextBlock Text="sensitive" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" />
-                  <Border x:Name="LegendBar" Width="70" Height="8" CornerRadius="4" Margin="6,0" VerticalAlignment="Center"
-                          BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" />
-                  <TextBlock Text="deep" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding LiveStatusText}" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" Margin="0,0,12,0"
+                             Visibility="{Binding LiveStatusText, Converter={StaticResource NullToCollapsed}}" />
+                  <CheckBox Content="Live" Style="{StaticResource ToggleSwitchStyle}" IsChecked="{Binding IsLiveViewEnabled}" IsEnabled="{Binding IsConnected}"
+                            Margin="0,0,18,0" AutomationProperties.Name="Live view"
+                            ToolTip="Show each key's travel and when it triggers. Key presses are read only while this window is open; nothing is recorded." />
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                              Visibility="{Binding IsLiveViewEnabled, Converter={StaticResource InverseBoolToVisibility}}">
+                    <TextBlock Text="sensitive" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" />
+                    <Border x:Name="LegendBar" Width="70" Height="8" CornerRadius="4" Margin="6,0" VerticalAlignment="Center"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" />
+                    <TextBlock Text="deep" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" />
+                  </StackPanel>
                 </StackPanel>
               </Grid>
               <views:KeyboardView Grid.Row="1" x:Name="KeyboardCanvas" Keys="{Binding Keys}" SelectionChanged="OnKeySelectionChanged" MaxHeight="300" />

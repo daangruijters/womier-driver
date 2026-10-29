@@ -32,10 +32,20 @@
                 </TextBlock>
               </Border.ToolTip>
               <Grid>
+                <!-- Live view: depth bar growing from the bottom, and the actuation point of the selected profile. -->
+                <Rectangle Margin="1" RadiusX="4" RadiusY="4" Fill="{Binding Foreground}" Opacity="{Binding BarOpacity}"
+                           IsHitTestVisible="False" RenderTransformOrigin="0.5,1">
+                  <Rectangle.RenderTransform>
+                    <ScaleTransform ScaleY="{Binding DepthFraction}" />
+                  </Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle Width="8" Height="2" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="{Binding ActuationMarkerMargin}"
+                           Fill="{Binding Foreground}" Opacity="0.9" IsHitTestVisible="False"
+                           Visibility="{Binding ShowActuationMarker, Converter={StaticResource BoolToVisibility}}" />
                 <TextBlock Text="{Binding Label}" FontSize="10" FontWeight="SemiBold" Margin="4,3,0,0"
                            Foreground="{Binding Foreground}" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding ValueText}" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                           Margin="0,0,3,2" Foreground="{Binding Foreground}" Opacity="0.85" />
+                           Margin="{Binding ValueMargin}" Foreground="{Binding Foreground}" Opacity="0.85" />
                 <Ellipse Width="5" Height="5" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,4,0"
                          Fill="{DynamicResource SystemFillColorSuccessBrush}"
                          Visibility="{Binding ShowRapidTrigger, Converter={StaticResource BoolToVisibility}}"

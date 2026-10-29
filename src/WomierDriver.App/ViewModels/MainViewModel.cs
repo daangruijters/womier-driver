@@ -11,6 +11,7 @@ using WomierDriver.App.Services;
 using WomierDriver.Core.Automation;
 using WomierDriver.Core.Device;
 using WomierDriver.Core.Profiles;
+using WomierDriver.Core.Protocol;
 
 namespace WomierDriver.App.ViewModels;
 
@@ -19,6 +20,13 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly AppServices _services;
     private readonly DriverEngine _engine;
     private readonly DispatcherTimer _applyTimer;
+    private readonly DispatcherTimer _liveTimer;
+    private readonly KeyViewModel?[] _keysBySlot = new KeyViewModel?[MagnetismStreams.SlotCount];
+    private readonly double[] _pendingDepth = new double[MagnetismStreams.SlotCount];
+    private readonly bool[] _pendingDirty = new bool[MagnetismStreams.SlotCount];
+    private readonly List<(int Slot, double Mm)> _flushBatch = new(MagnetismStreams.SlotCount);
+    private readonly object _liveLock = new();
+    private bool _pendingAny;
     private bool _suppressSelectionLoad;
 
     [ObservableProperty]
@@ -50,6 +58,13 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ReadFromKeyboardCommand), nameof(ReapplyCommand), nameof(ActivateProfileCommand))]
     private bool _isConnected;
 
+    /// <summary>Live view: tiles show the keyboard's current key travel and which keys Windows receives. Session-only.</summary>
+    [ObservableProperty]
+    private bool _isLiveViewEnabled;
+
+    [ObservableProperty]
+    private string? _liveStatusText;
+
     public MainViewModel(AppServices services)
     {
         _services = services;
@@ -57,7 +72,9 @@ public sealed partial class MainViewModel : ObservableObject
         Editor = new SelectionEditorViewModel(ApplyToSelection);
         foreach (var definition in Sk75TmrLayout.Keys)
         {
-            Keys.Add(new KeyViewModel(definition));
+            var key = new KeyViewModel(definition);
+            Keys.Add(key);
+            _keysBySlot[definition.Slot] = key;
         }
 
         _applyTimer = new DispatcherTimer(DispatcherPriority.Background, services.Dispatcher) { Interval = TimeSpan.FromMilliseconds(700) };
@@ -67,10 +84,18 @@ public sealed partial class MainViewModel : ObservableObject
             _engine.NotifyProfilesChanged();
         };
 
+        // Travel samples arrive at up to ~1 kHz on a background thread; the tiles are refreshed at most every 16 ms.
+        _liveTimer = new DispatcherTimer(DispatcherPriority.Render, services.Dispatcher) { Interval = TimeSpan.FromMilliseconds(16) };
+        _liveTimer.Tick += (_, _) => FlushLiveTravel();
+        _engine.LiveTravel += OnLiveTravel;
+
         _engine.StateChanged += (_, _) => services.Dispatcher.BeginInvoke(RefreshEngineState);
         ReloadProfiles();
         RefreshEngineState();
     }
+
+    /// <summary>Raised on the UI thread when the live view is switched on or off (the window registers Raw Input accordingly).</summary>
+    public event Action<bool>? LiveViewChanged;
 
     public ObservableCollection<ProfileViewModel> Profiles { get; } = [];
 
@@ -155,6 +180,125 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Called by the keyboard view after the user changed the selection.</summary>
     public void SelectionChanged() => LoadSelectionIntoEditor();
 
+    /// <summary>Called by the window's Raw Input listener, on the UI thread, when Windows receives or releases a key.</summary>
+    public void OnPhysicalKey(int slot, bool isDown)
+    {
+        if (IsLiveViewEnabled && _keysBySlot[slot] is { } key)
+        {
+            key.IsPressed = isDown;
+        }
+    }
+
+    /// <summary>Called by the window when it hides: the live view belongs to the window, not to the tray driver.</summary>
+    public void OnWindowHidden() => IsLiveViewEnabled = false;
+
+    partial void OnIsLiveViewEnabledChanged(bool value)
+    {
+        foreach (var key in Keys)
+        {
+            key.IsLive = value;
+            if (!value)
+            {
+                key.ResetLive();
+            }
+        }
+
+        if (value)
+        {
+            _liveTimer.Start();
+        }
+        else
+        {
+            _liveTimer.Stop();
+            lock (_liveLock)
+            {
+                Array.Clear(_pendingDirty);
+                _pendingAny = false;
+            }
+        }
+
+        UpdateMarkers();
+        RefreshLiveStatus();
+        LiveViewChanged?.Invoke(value);
+        _ = SetEngineLiveViewAsync(value);
+    }
+
+    private async Task SetEngineLiveViewAsync(bool enabled)
+    {
+        try
+        {
+            // Opening the input collection enumerates HID devices (a second or so); keep that off the UI thread.
+            await Task.Run(() => _engine.SetLiveViewAsync(enabled));
+        }
+        catch (Exception ex)
+        {
+            _services.Log.Error("Could not switch the live view", ex);
+        }
+    }
+
+    private void OnLiveTravel(object? sender, LiveTravelSample sample)
+    {
+        lock (_liveLock)
+        {
+            _pendingDepth[sample.Slot] = sample.Mm;
+            _pendingDirty[sample.Slot] = true;
+            _pendingAny = true;
+        }
+    }
+
+    private void FlushLiveTravel()
+    {
+        lock (_liveLock)
+        {
+            if (!_pendingAny)
+            {
+                return;
+            }
+
+            _pendingAny = false;
+            _flushBatch.Clear();
+            for (var slot = 0; slot < _pendingDirty.Length; slot++)
+            {
+                if (_pendingDirty[slot])
+                {
+                    _pendingDirty[slot] = false;
+                    _flushBatch.Add((slot, _pendingDepth[slot]));
+                }
+            }
+        }
+
+        foreach (var (slot, mm) in _flushBatch)
+        {
+            if (_keysBySlot[slot] is { } key)
+            {
+                key.LiveDepthMm = mm;
+            }
+        }
+    }
+
+    private void UpdateMarkers()
+    {
+        var enabled = SelectedProfile?.IsActive == true;
+        foreach (var key in Keys)
+        {
+            key.MarkersEnabled = enabled;
+        }
+    }
+
+    private void RefreshLiveStatus()
+    {
+        LiveStatusText = !IsLiveViewEnabled
+            ? null
+            : _engine.LiveView switch
+            {
+                LiveViewState.Streaming => SelectedProfile?.IsActive == true
+                    ? "press keys to see their travel"
+                    : "actuation marks need the active profile",
+                LiveViewState.Waiting => "waiting for the keyboard",
+                _ => "starting…",
+            };
+    }
+
     partial void OnSelectedProfileChanged(ProfileViewModel? value)
     {
         foreach (var key in Keys)
@@ -162,6 +306,8 @@ public sealed partial class MainViewModel : ObservableObject
             key.Settings = value?.Model.GetKey(key.Slot) ?? KeySettings.VendorDefault;
         }
 
+        UpdateMarkers();
+        RefreshLiveStatus();
         LoadSelectionIntoEditor();
         NewGameText = string.Empty;
     }
@@ -547,6 +693,11 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var keyboard = _engine.Keyboard;
         IsConnected = keyboard is not null;
+        if (!IsConnected && IsLiveViewEnabled)
+        {
+            IsLiveViewEnabled = false;
+        }
+
         ConnectionText = keyboard is null
             ? "Keyboard not connected"
             : $"Connected · {keyboard.ConnectionLabel} · firmware {keyboard.FirmwareLabel}";
@@ -582,6 +733,17 @@ public sealed partial class MainViewModel : ObservableObject
             };
 
         IsApplying = _engine.IsApplying;
+        if (IsApplying && IsLiveViewEnabled)
+        {
+            // The travel stream is paused while the keyboard is written; drop bars that would otherwise go stale.
+            foreach (var key in Keys)
+            {
+                key.LiveDepthMm = 0;
+            }
+        }
+
+        UpdateMarkers();
+        RefreshLiveStatus();
         var last = _engine.LastApply;
         LastApplyText = _engine.IsApplying
             ? "Writing to the keyboard…"
