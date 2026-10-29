@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>WomierDriver.App</RootNamespace>
+    <AssemblyName>WomierDriver</AssemblyName>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WPF0001: the Fluent ThemeMode API is still marked experimental. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <Description>System-tray driver and configuration utility for the Womier SK75 TMR keyboard.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WomierDriver.Core\WomierDriver.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\app-offline.ico" />
+  </ItemGroup>
+
+</Project>

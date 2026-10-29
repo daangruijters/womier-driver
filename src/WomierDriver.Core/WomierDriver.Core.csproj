@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>WomierDriver.Core</RootNamespace>
+    <Description>Protocol, device, profile and automation logic for the Womier SK75 TMR driver.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HidSharp" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>

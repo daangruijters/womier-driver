@@ -1,0 +1,164 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Imaging;
+using H.NotifyIcon;
+using H.NotifyIcon.Core;
+using WomierDriver.App.Services;
+using WomierDriver.Core.Automation;
+
+namespace WomierDriver.App.Tray;
+
+/// <summary>
+/// The system-tray presence of the driver: icon, tooltip with the active profile, a right-click menu to switch
+/// profiles or open the window, and a notification when a game switches the profile.
+/// </summary>
+public sealed class TrayIconController : IDisposable
+{
+    private static readonly Uri OnlineIcon = new("pack://application:,,,/Assets/app.ico");
+    private static readonly Uri OfflineIcon = new("pack://application:,,,/Assets/app-offline.ico");
+
+    private readonly AppServices _services;
+    private readonly Action _showWindow;
+    private readonly Action _exit;
+    private readonly TaskbarIcon _icon;
+    private bool _wasConnected = true;
+
+    public TrayIconController(AppServices services, Action showWindow, Action exit)
+    {
+        _services = services;
+        _showWindow = showWindow;
+        _exit = exit;
+
+        _icon = new TaskbarIcon
+        {
+            ToolTipText = "Womier SK75 TMR",
+            NoLeftClickDelay = true,
+            MenuActivation = PopupActivationMode.RightClick,
+            IconSource = new BitmapImage(OfflineIcon),
+        };
+        _icon.TrayLeftMouseUp += (_, _) => _showWindow();
+        _icon.ContextMenu = new ContextMenu();
+        _icon.ContextMenu.Opened += (_, _) => RebuildMenu();
+        _icon.ForceCreate(enablesEfficiencyMode: false);
+
+        _services.Engine.StateChanged += (_, _) => _services.Dispatcher.BeginInvoke(Refresh);
+        _services.Engine.ProfileApplied += (_, e) => _services.Dispatcher.BeginInvoke(() => OnProfileApplied(e));
+        Refresh();
+    }
+
+    public void Dispose() => _icon.Dispose();
+
+    /// <summary>Shows a balloon / toast notification from the tray icon.</summary>
+    public void Notify(string title, string message)
+    {
+        try
+        {
+            _icon.ShowNotification(title, message, NotificationIcon.None, sound: false);
+        }
+        catch
+        {
+            // Notifications are best effort (they can be disabled system-wide).
+        }
+    }
+
+    private void Refresh()
+    {
+        var engine = _services.Engine;
+        var connected = engine.IsConnected;
+        if (connected != _wasConnected)
+        {
+            _icon.IconSource = new BitmapImage(connected ? OnlineIcon : OfflineIcon);
+            _wasConnected = connected;
+        }
+
+        var line2 = !connected
+            ? "Keyboard not connected"
+            : engine.ActiveProfile is null
+                ? "No profile"
+                : engine.ActiveReason switch
+                {
+                    ActivationReason.Game => $"{engine.ActiveProfile.Name} · {engine.ActiveTrigger}",
+                    ActivationReason.Manual => $"{engine.ActiveProfile.Name} · manual",
+                    _ => engine.ActiveProfile.Name,
+                };
+        _icon.ToolTipText = $"Womier SK75 TMR\n{line2}";
+        if (_icon.ContextMenu is { IsOpen: false })
+        {
+            RebuildMenu();
+        }
+    }
+
+    private void RebuildMenu()
+    {
+        var menu = _icon.ContextMenu!;
+        menu.Items.Clear();
+        var engine = _services.Engine;
+
+        menu.Items.Add(new MenuItem
+        {
+            Header = engine.IsConnected ? $"SK75 TMR · {engine.Keyboard!.ConnectionLabel} · fw {engine.Keyboard.FirmwareLabel}" : "SK75 TMR · not connected",
+            IsEnabled = false,
+        });
+        menu.Items.Add(new Separator());
+
+        var automatic = new MenuItem
+        {
+            Header = "Automatic (follow games)",
+            IsCheckable = true,
+            IsChecked = engine.ManualOverride is null,
+            IsEnabled = engine.Settings.AutoSwitchEnabled,
+        };
+        automatic.Click += (_, _) => engine.SetManualProfile(null);
+        menu.Items.Add(automatic);
+        menu.Items.Add(new Separator());
+
+        foreach (var profile in engine.Library.Profiles.ToList())
+        {
+            var id = profile.Id;
+            var item = new MenuItem
+            {
+                Header = profile.IsDefault ? $"{profile.Name}  (default)" : profile.Name,
+                IsCheckable = true,
+                IsChecked = engine.ActiveProfile?.Id == id,
+            };
+            item.Click += (_, _) => engine.SetManualProfile(id);
+            menu.Items.Add(item);
+        }
+
+        if (engine.Library.Profiles.Count == 0)
+        {
+            menu.Items.Add(new MenuItem { Header = "No profiles yet", IsEnabled = false });
+        }
+
+        menu.Items.Add(new Separator());
+        var open = new MenuItem { Header = "Open Womier SK75 TMR…" };
+        open.Click += (_, _) => _showWindow();
+        menu.Items.Add(open);
+        var exit = new MenuItem { Header = "Exit" };
+        exit.Click += (_, _) => _exit();
+        menu.Items.Add(exit);
+    }
+
+    private void OnProfileApplied(ProfileAppliedEventArgs e)
+    {
+        if (!e.ProfileChanged || !_services.Engine.Settings.NotifyOnProfileSwitch)
+        {
+            return;
+        }
+
+        if (!e.Result.Success)
+        {
+            Notify("Profile not applied", $"{e.Profile.Name}: {e.Result.Message}");
+            return;
+        }
+
+        var why = e.Reason switch
+        {
+            ActivationReason.Game when e.Trigger is not null => $"{e.Trigger} is running",
+            ActivationReason.Default => "no game running",
+            ActivationReason.Manual => "selected manually",
+            _ => string.Empty,
+        };
+        Notify($"Profile: {e.Profile.Name}", why.Length == 0 ? "Applied to the keyboard" : $"Applied to the keyboard ({why})");
+    }
+}

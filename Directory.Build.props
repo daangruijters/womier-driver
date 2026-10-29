@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Authors>Daan Gruijters</Authors>
+    <Product>Womier SK75 TMR Driver</Product>
+    <Copyright>Copyright © Daan Gruijters</Copyright>
+    <Version>0.1.0</Version>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>

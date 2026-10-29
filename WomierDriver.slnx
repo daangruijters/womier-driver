@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WomierDriver.App/WomierDriver.App.csproj" />
+    <Project Path="src/WomierDriver.Core/WomierDriver.Core.csproj" />
+    <Project Path="src/WomierDriver.Tests/WomierDriver.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/HidProbe/HidProbe.csproj" />
+  </Folder>
+</Solution>

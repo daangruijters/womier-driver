@@ -1,0 +1,35 @@
+<UserControl x:Class="WomierDriver.App.Views.SettingSlider"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+  <Grid Margin="0,6">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="150" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="78" />
+    </Grid.ColumnDefinitions>
+
+    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+      <TextBlock Text="{Binding Label, ElementName=Root}" Style="{StaticResource BodyTextBlockStyle}" />
+      <TextBlock Text="{Binding Hint, ElementName=Root}" Style="{StaticResource SecondaryCaptionStyle}"
+                 Visibility="{Binding Hint, ElementName=Root, Converter={StaticResource NullToCollapsed}}" />
+    </StackPanel>
+
+    <Slider x:Name="ValueSlider" Grid.Column="1" VerticalAlignment="Center"
+            Minimum="{Binding Minimum, ElementName=Root}"
+            Maximum="{Binding Maximum, ElementName=Root}"
+            SmallChange="{Binding Step, ElementName=Root}"
+            LargeChange="0.1"
+            IsMoveToPointEnabled="True"
+            Thumb.DragCompleted="OnDragCompleted"
+            ValueChanged="OnSliderValueChanged" />
+
+    <Grid Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center">
+      <TextBox x:Name="ValueBox" HorizontalContentAlignment="Right" Padding="6,4"
+               LostFocus="OnValueBoxCommit" KeyDown="OnValueBoxKeyDown" />
+      <TextBlock Text="Mixed" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Style="{StaticResource SecondaryCaptionStyle}"
+                 Visibility="{Binding IsMixed, ElementName=Root, Converter={StaticResource BoolToVisibility}}" />
+    </Grid>
+  </Grid>
+</UserControl>

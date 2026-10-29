@@ -1,0 +1,42 @@
+<Window x:Class="WomierDriver.App.Views.PickProcessWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Pick a running game" Width="560" Height="520" MinWidth="440" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="CanResize">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" Style="{StaticResource SecondaryBodyStyle}"
+               Text="Start the game first, then pick it here. The profile is applied whenever that process is running." />
+
+    <Grid Grid.Row="1" Margin="0,12,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBox x:Name="SearchBox" Grid.Column="0" TextChanged="OnSearchChanged" />
+      <CheckBox x:Name="ShowAll" Grid.Column="1" Content="Show background processes" Margin="12,0,0,0" VerticalAlignment="Center"
+                Checked="OnFilterChanged" Unchecked="OnFilterChanged" />
+    </Grid>
+
+    <ListView x:Name="ProcessList" Grid.Row="2" SelectionMode="Extended" MouseDoubleClick="OnDoubleClick">
+      <ListView.View>
+        <GridView>
+          <GridViewColumn Header="Process" Width="180" DisplayMemberBinding="{Binding Name}" />
+          <GridViewColumn Header="Window title" Width="300" DisplayMemberBinding="{Binding Title}" />
+        </GridView>
+      </ListView.View>
+    </ListView>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button Content="Refresh" Click="OnRefresh" Margin="0,0,8,0" />
+      <Button Content="Add selected" Click="OnAccept" Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0" IsDefault="True" />
+      <Button Content="Cancel" IsCancel="True" />
+    </StackPanel>
+  </Grid>
+</Window>
