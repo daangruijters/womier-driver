@@ -144,4 +144,4 @@ docs/                    protocol, architecture, reverse-engineering notes and v
 ## Credits and license
 
 Independent project, not affiliated with Womier. Protocol knowledge comes from reading the vendor's software
-and from measurements on the author's own keyboard. Private repository; all rights reserved.
+and from measurements on the author's own keyboard.
