@@ -67,7 +67,9 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
   keyboard that was asleep when the receiver appeared as soon as it wakes, and on wake-up re-evaluates, so a write
   that hit a sleeping keyboard (`LastApply` says "written as soon as it wakes up") happens then. The connection, and
   with it the memory of what was last written, survives sleep, so waking up does not rewrite anything.
-* Plugging the cable in while connected over the receiver switches to USB on the next hot-plug rescan.
+* Setting the mode switch to USB (cable plugged in) while connected over the receiver switches to USB on the next
+  hot-plug rescan; setting it back to 2.4 GHz removes the wired interface and the rescan falls back to the receiver.
+  With the switch on 2.4 GHz the cable only charges, so nothing changes.
 * `Sk75Keyboard.WriteKeySettingsAsync` skips the write entirely when the keyboard already holds every table, which
   keeps reconnects cheap on both transports.
 

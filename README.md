@@ -25,8 +25,8 @@ switches profiles automatically when a game is running.
 * **Tray driver** – runs in the background with a tray icon. Left click opens the window; right click shows a
   menu to pick a profile by hand, return to automatic switching, open the utility or exit. Closing the window
   keeps the driver running. Optional start with Windows and a toast when a game switches the profile.
-* **Cable or 2.4 GHz** – talks to the keyboard itself, on its USB cable or through its 2.4 GHz receiver (the
-  cable wins when both are connected); no vendor processes are needed. Every write is verified by reading the
+* **Cable or 2.4 GHz** – talks to the keyboard itself, on its USB cable or through its 2.4 GHz receiver (it
+  follows the keyboard's mode switch; with the switch on 2.4 GHz the cable only charges); no vendor processes are needed. Every write is verified by reading the
   keyboard back, and nothing is written when the keyboard already holds the settings. Over 2.4 GHz the sidebar
   shows the battery level and when the keyboard sleeps; a profile switch that happens while it sleeps is written
   as soon as you press a key.
