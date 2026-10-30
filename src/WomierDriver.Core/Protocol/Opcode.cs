@@ -32,6 +32,23 @@ public static class Opcode
     public const byte GetFn = 0x90;
     public const byte GetMultiMagnetism = 0xE5;
 
-    /// <summary>Dongle-only query: returns the id of the keyboard paired over 2.4 GHz in bytes 1..2.</summary>
+    /// <summary>Dongle-only query: returns the id of the keyboard paired over 2.4 GHz in bytes 1..2 (not answered by the SK75 TMR's receiver).</summary>
     public const byte DongleGetPairedId = 0xF1;
+
+    /// <summary>Receiver-only query, answered by the 2.4 GHz receiver itself: its firmware version in bytes 1..2.</summary>
+    public const byte ReceiverGetVersion = 0xF0;
+
+    /// <summary>
+    /// Receiver-only query, answered by the 2.4 GHz receiver itself without contacting the keyboard: whether the keyboard
+    /// is connected, its battery level and the progress of a relayed command. See <see cref="ReceiverStatus"/>.
+    /// </summary>
+    public const byte ReceiverGetStatus = 0xF7;
+
+    /// <summary>
+    /// Receiver-only: loads the keyboard's answer to the last relayed command into the receiver's feature buffer, so
+    /// the following GET_FEATURE returns it. Only meaningful once <see cref="ReceiverStatus.AnswerReady"/> is set.
+    /// </summary>
+    public const byte ReceiverFetchAnswer = 0xFC;
+
+    // 0xF8 (with a magic sequence) switches the receiver into its firmware-update mode and is deliberately not defined.
 }

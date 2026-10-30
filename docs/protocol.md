@@ -11,7 +11,7 @@ See [reverse-engineering/README.md](reverse-engineering/README.md) for the prove
 |---|---|
 | USB vendor id | `0x3151` |
 | Product id, wired | `0x5030` (shared by many RY5088 boards, so the model is confirmed by its device id) |
-| Product id, 2.4 GHz receiver | `0x5038` |
+| Product id, 2.4 GHz receiver | `0x5038`; same collections as the keyboard, but commands must be relayed, see §7 |
 | Configuration collection | usage page `0xFFFF`, usage `0x0002`, interface `MI_02` |
 | Report | feature report, report id `0`, 64 data bytes (65 with the id byte) |
 | Vendor input collection | usage page `0xFFFF`, usage `0x0001`, interface `MI_01` (path `…&mi_01&col05…`), report id 5, 32 data bytes per input report: device notifications and the live travel stream, see §6 |
@@ -52,7 +52,10 @@ Observed response behaviour:
 | `0xE5` | GET_MULTI_MAGNETISM | query | read one 64-byte chunk of a per-key table, see §4 |
 | `0x65` | SET_MULTI_MAGNETISM | command | write per-key tables, see §4 |
 | `0x1B` | SET_MAGNETISM_REPORT | command | byte 1 = 1 starts / 0 stops the live travel input reports, see §6; no answer |
-| `0xF1` | (receiver) | query | on the 2.4 GHz receiver: bytes 1..2 = id of the paired keyboard; all zeros / `00 00 00 01 01 01 01` when nothing is paired or the keyboard is wired |
+| `0xF0` | (receiver) | query | answered by the 2.4 GHz receiver itself: bytes 1..2 = its firmware version (`F0 02 08 …` = 2050 on the SK75 TMR's receiver) |
+| `0xF7` | (receiver) | query | answered by the receiver itself, no checksum: status of the keyboard behind it, see §7 |
+| `0xFC` | (receiver) | command | no checksum: makes the receiver's next GET_FEATURE return the keyboard's answer to the last relayed command, see §7 |
+| `0xF1` | (receiver) | query | described in the vendor source as "paired keyboard id"; the SK75 TMR's receiver does not answer it |
 
 The vendor application also implements key remapping (`0x0A`/`0x8A`, `0x10`/`0x90`), lighting (`0x07`, `0x0C`),
 macros, sleep timers and firmware upgrade. Those are documented in the vendor source kept under
@@ -128,8 +131,9 @@ Per-key tables are not addressed per on-board profile; writes affect the profile
 
 ## 5. Timing (measured)
 
-* Identify + read all managed tables: about 250 ms.
-* Full profile write (6 tables, 28 packets) including commit wait and verification: about 950 ms.
+* Identify + read all managed tables: about 250 ms (USB), about 620 ms through the 2.4 GHz receiver.
+* Full profile write (6 tables, 28 packets) including commit wait and verification: about 950 ms (USB), about
+  1.65 s through the receiver.
 * Live travel stream: reports 2–3 ms apart while a key moves (up to about 1 kHz); a table-254 sweep takes about
   42 ms with the 10 ms read delay (23 Hz).
 
@@ -169,3 +173,54 @@ read delay. The driver uses the stream.
 **Never send `0x1C` (SET_MAGNETISM_CAL) or `0x1E` (SET_MAGNETISM_MAXIMUM_CALIBRATION).** The vendor's calibration
 dialog wraps its table-254 polling in them; they make the firmware re-learn the rest and bottom-out positions of
 every switch, and the vendor tells the user to bottom out every key while they are active.
+
+## 7. The 2.4 GHz receiver (verified on the keyboard, 2026-10-30)
+
+The receiver (`PID 0x5038`) exposes the same two vendor collections as the keyboard (configuration `MI_02`,
+input `MI_01&Col05`). Keyboard commands are not answered by plain SET/GET pairs, though: the receiver relays them
+over the radio, and its own commands (`0xF0`–`0xFF`) steer that relay. The vendor software does this in its native
+helper (`iot_driver.exe`, module `dangle_common.rs`); the sequence below was captured from that helper and
+reproduced by this driver.
+
+**Status (`F7`, no checksum).** Answered by the receiver itself, without contacting the keyboard, so it also works
+while the keyboard sleeps. The answer does not echo the opcode:
+
+```
+byte 0  1 once the keyboard's answer to the last relayed command has arrived ("is_ready_read" in the helper)
+byte 1  keyboard battery level in percent (last known value while the keyboard sleeps; 0 = unknown)
+byte 3  0 while the keyboard is connected over 2.4 GHz, 1 while it sleeps, is out of range or uses its cable
+byte 5  0 while a relayed command is on its way to the keyboard, 1 once delivered
+bytes 2, 4, 6  always 0, 1, 1 so far
+```
+
+Captured frames: `00 64 00 00 01 01 01` connected and idle, `00 64 00 00 01 00 01` command in flight,
+`01 64 00 00 01 01 01` answer ready, `00 64 00 01 01 01 01` keyboard asleep, `00 00 00 01 01 01 01` keyboard on its
+cable.
+
+**Relaying a command.**
+
+1. `F7`: give up (keyboard asleep) when byte 3 is 1.
+2. Send the keyboard command unchanged, including its checksum (`8F 00 00 00 00 00 00 70`).
+3. Poll `F7` until byte 0 is 1. Sending a new command clears the flag, so it only comes up for this command.
+4. `FC` (no checksum), then GET_FEATURE: the 64-byte answer, exactly as over USB (table chunks included).
+
+For commands whose answer is not needed (table writes, `1B`), the driver waits for byte 5 = 1 or byte 0 = 1 instead
+of fetching. Two quirks seen on the receiver: byte 5 sometimes stays 0 although the answer is already waiting, and
+now and then a command is lost (byte 5 stays 0, no answer, nothing retried). The driver therefore waits for the
+answer flag only, and sends a command again when an attempt shows no progress within 600 ms (up to four attempts;
+repeating a query, a table chunk or `1B` is harmless).
+
+Timing: the first command after a quiet spell completes in about 100–160 ms, the following ones in 7–25 ms.
+`GET_RF_VERSION` answers 0 through the receiver as well, so the USB firmware version decides the travel unit.
+
+**Sleep.** The keyboard drops its radio link after a while without key presses. The receiver then reports byte 3 = 1
+and relays nothing; the vendor helper answers "dev is not online" in that state. A key press reconnects it, and
+nothing announces that on USB (the receiver stays plugged in), so the driver polls `F7` every 2 s while a receiver is
+in use.
+
+**Never send `F8`.** With the sequence `F8 55 AA 55 AA 00 00 82` it switches the receiver into its firmware-update
+mode (vendor `boot_rf`).
+
+**Sharing the receiver.** The relay keeps state in the receiver (one answer buffer, one pending command). Two
+programs relaying at the same time can therefore read each other's answers. The vendor helper only relays while
+its own application is busy with the keyboard, so close the vendor application while this driver uses the receiver.

@@ -51,6 +51,10 @@ keyboard, so do not let them apply different profiles at the same time.
   firmware. Travel units depend on the firmware version (`TravelScale.ForFirmware`); never hard-code 100.
 * **Only slots with a physical key are patched** when writing; the other 47 table entries are read first and
   written back unchanged.
+* **2.4 GHz receiver.** Keyboard commands only reach the keyboard through `ReceiverRelayChannel` (status `F7`, command,
+  poll, fetch `FC`; see `docs/protocol.md` §7). Never send `F8` (receiver firmware-update mode). A sleeping keyboard is
+  a normal state (`KeyboardAsleepException`), not a device failure: keep the connection, postpone writes, let the
+  receiver poll in `DriverEngine.Receiver.cs` pick up the wake-up. Test receiver logic with `FakeReceiver`.
 * **Live view.** Never send the calibration opcodes `0x1C` / `0x1E` (they re-learn the switch calibration; they
   are deliberately absent from `Opcode`). The travel stream (`0x1B`) is owned by the engine: paused around every
   write, switched off on connect and dispose, dropped synchronously under the device gate when the keyboard goes
@@ -71,8 +75,12 @@ keyboard, so do not let them apply different profiles at the same time.
 * `ThemeMode` is still experimental → `WPF0001` is suppressed in the App project.
 * HidSharp opens devices in shared mode; the vendor app can run concurrently. The keyboard answers table reads
   without an opcode echo, so do not "validate" `0xE5` responses by their first byte.
-* The 2.4 GHz receiver (`PID 0x5038`) answers `00 00 00 01 01 01 01` while the keyboard is wired; the wired
-  interface is tried first. The receiver path has not been exercised with the keyboard on 2.4 GHz yet.
+* The 2.4 GHz receiver (`PID 0x5038`) never answers a keyboard command sent like over USB: its GET_FEATURE keeps
+  returning its last own answer (often the status frame `00 00 00 01 01 01 01` while the keyboard is wired). The
+  wired interface is tried first. Hardware checks over 2.4 GHz need the keyboard awake: a key press wakes it, and
+  `hidprobe receiver` shows whether it is. The vendor helper (`iot_driver_v*.exe`) was used as a reference by
+  attaching a small debugger that logged its `HidD_SetFeature` calls; keep its application closed while testing the
+  receiver, since both relay through the same answer buffer.
 * Screenshots for UI checks: when the session is locked, `CopyFromScreen` returns the lock screen; use
   `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT)` instead. UI Automation (`System.Windows.Automation`) can click
   the named buttons ("WASD", "Rapid trigger", …) for scripted checks.

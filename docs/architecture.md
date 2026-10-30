@@ -23,7 +23,10 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
   thread delivering the keyboard's 32-byte vendor input reports), both implemented on HidSharp, plus
   `KeyboardLocator`, which finds the two vendor collections (usage page `0xFFFF`: usage 2 = configuration,
   usage 1 = input) on VID `0x3151` PID `0x5030` (wired) / `0x5038` (receiver) and exposes hot-plug
-  notifications.
+  notifications. `ReceiverRelayChannel` is the `IFeatureChannel` for a keyboard behind its 2.4 GHz receiver: it
+  wraps the receiver's raw channel and relays every command (status `F7`, command, poll, fetch `FC`; resend after
+  600 ms without progress), so everything above it works unchanged over the radio. A sleeping keyboard surfaces as
+  `KeyboardAsleepException`, which is deliberately not a device failure.
 * **Device** – `Sk75Keyboard` identifies the board (device id 2518 from `GET_USB_VERSION`), reads the analog
   tables into `KeySettings` per key, writes them back with the vendor's sequence and a read-back check, and
   switches the live travel stream on and off. `Sk75TmrLayout` holds the 81 keys (matrix slot, HID usage,
@@ -54,6 +57,19 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
   automatic selection takes over again.
 * Writes are skipped when the same profile content (`Profile.KeySignature()`) is already on the keyboard.
   Re-connecting the keyboard resets that memory, so the active profile is re-applied after a replug.
+
+### 2.4 GHz receiver
+
+* Interfaces are tried in `KeyboardLocator` order, cable first. A receiver gets a `ReceiverRelayChannel`; when its
+  keyboard sleeps, the receiver is remembered as "waiting" instead of failing.
+* `DriverEngine.Receiver.cs` polls the receiver every 2 s with the receiver-local status query (it never reaches the
+  keyboard and skips a round when the device gate is busy). It tracks sleep and battery for the UI, identifies a
+  keyboard that was asleep when the receiver appeared as soon as it wakes, and on wake-up re-evaluates, so a write
+  that hit a sleeping keyboard (`LastApply` says "written as soon as it wakes up") happens then. The connection, and
+  with it the memory of what was last written, survives sleep, so waking up does not rewrite anything.
+* Plugging the cable in while connected over the receiver switches to USB on the next hot-plug rescan.
+* `Sk75Keyboard.WriteKeySettingsAsync` skips the write entirely when the keyboard already holds every table, which
+  keeps reconnects cheap on both transports.
 
 ### Live view
 

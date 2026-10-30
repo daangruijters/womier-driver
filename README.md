@@ -25,9 +25,11 @@ switches profiles automatically when a game is running.
 * **Tray driver** – runs in the background with a tray icon. Left click opens the window; right click shows a
   menu to pick a profile by hand, return to automatic switching, open the utility or exit. Closing the window
   keeps the driver running. Optional start with Windows and a toast when a game switches the profile.
-* **Direct USB HID** – talks to the keyboard itself (wired first, 2.4 GHz receiver as fallback); no vendor
-  processes are needed. Every write is verified by reading the keyboard back. Reconnecting the keyboard
-  re-applies the active profile.
+* **Cable or 2.4 GHz** – talks to the keyboard itself, on its USB cable or through its 2.4 GHz receiver (the
+  cable wins when both are connected); no vendor processes are needed. Every write is verified by reading the
+  keyboard back, and nothing is written when the keyboard already holds the settings. Over 2.4 GHz the sidebar
+  shows the battery level and when the keyboard sleeps; a profile switch that happens while it sleeps is written
+  as soon as you press a key.
 * **Light and dark** – WPF Fluent theme following the Windows theme and accent colour.
 
 ## Requirements
@@ -35,8 +37,9 @@ switches profiles automatically when a game is running.
 * Windows 10/11 x64. The portable release needs nothing else; a framework-dependent build needs the
   [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 * A Womier SK75 TMR (USB VID `0x3151`, firmware 3.x). Other RY5088-based boards are detected but ignored.
-* The vendor "WOMIER Driver" can stay installed; both can even run at the same time. For predictable results
-  let only one of them start with Windows.
+* The vendor "WOMIER Driver" can stay installed; both can even run at the same time on the cable. For
+  predictable results let only one of them start with Windows, and close the vendor application while using the
+  2.4 GHz receiver (both relay their commands through the receiver's single answer buffer).
 
 ## Download and run (no installation)
 
@@ -107,6 +110,8 @@ dotnet run --project tools/HidProbe -- set KeyW 1.2  # write one actuation point
 dotnet run --project tools/HidProbe -- watch         # plug / unplug events
 dotnet run --project tools/HidProbe -- live 30       # print the keyboard's live travel reports for 30 s
 dotnet run --project tools/HidProbe -- travel 10     # poll the live travel table instead, 10 s
+dotnet run --project tools/HidProbe -- receiver      # 2.4 GHz receiver: keyboard awake?, battery (works while it sleeps)
+dotnet run --project tools/HidProbe -- dump --trace  # over 2.4 GHz: log every receiver status while relaying
 ```
 
 ## How it works
@@ -115,8 +120,10 @@ The keyboard exposes a vendor HID collection that accepts 64-byte feature report
 tables (128 slots × u16 or u8) that are read in 64-byte chunks and written in 56-byte chunks with a commit
 flag on the last one; the firmware version decides the unit (0.01 mm on current firmware). For the live view the
 keyboard is switched into a reporting mode in which it streams the travel of every moving key (up to about
-1 kHz) on a second HID collection, while Windows' own key events say when a key has actually triggered. The
-protocol was recovered from the vendor's Electron application and verified against the keyboard; see
+1 kHz) on a second HID collection, while Windows' own key events say when a key has actually triggered. Over
+2.4 GHz the same commands are relayed by the receiver: the driver asks it whether the keyboard is awake, sends the
+command, waits until the receiver has the answer and then fetches it. The protocol was recovered from the vendor's
+Electron application and native helper and verified against the keyboard; see
 [docs/protocol.md](docs/protocol.md). The structure of the code is described in
 [docs/architecture.md](docs/architecture.md), and [CLAUDE.md](CLAUDE.md) has the working rules for the repo.
 
@@ -139,7 +146,8 @@ docs/                    protocol, architecture, reverse-engineering notes and v
 * Top dead zone is only available on firmware 1024 and newer; the SK75 TMR ships with 776 (3.08).
 * In the live view the "pressed" outline comes from Windows, so Fn (which never reaches Windows) and keys
   remapped in the vendor software do not light up as expected; the depth bar works for every key.
-* The 2.4 GHz receiver path is implemented but has only been verified with the keyboard on its cable.
+* Over 2.4 GHz every command travels through the receiver, so a profile switch takes about 1.7 s instead of
+  1 s, and a sleeping keyboard only gets its settings after the next key press.
 
 ## Credits and license
 
