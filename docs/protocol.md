@@ -135,7 +135,10 @@ Per-key tables are not addressed per on-board profile; writes affect the profile
 * Full profile write (6 tables, 28 packets) including commit wait and verification: about 950 ms (USB), about
   1.65 s through the receiver.
 * Live travel stream: reports 2–3 ms apart while a key moves (up to about 1 kHz); a table-254 sweep takes about
-  42 ms with the 10 ms read delay (23 Hz).
+  42 ms with the 10 ms read delay (23 Hz). Through the receiver up to about 375 reports/s were counted.
+* 2.4 GHz: the keyboard fell asleep about 2 minutes after the last key press; the 2 s receiver poll noticed the
+  wake-up and a pending profile write was verified 1.8 s later. Moving the mode switch from USB to 2.4 GHz
+  reconnected through the receiver 250 ms after the USB interface disappeared.
 
 ## 6. Live travel reporting (verified on the keyboard, 2026-10-29)
 
@@ -217,6 +220,15 @@ Timing: the first command after a quiet spell completes in about 100–160 ms, t
 and relays nothing; the vendor helper answers "dev is not online" in that state. A key press reconnects it, and
 nothing announces that on USB (the receiver stays plugged in), so the driver polls `F7` every 2 s while a receiver is
 in use.
+
+**Live travel.** `1B 01` / `1B 00` are relayed like any other command, and the receiver forwards the keyboard's
+travel reports on its own vendor input collection (`PID 0x5038`, `MI_01&Col05`) with the same layout as over USB
+(§6). Verified 2026-10-31 with real key presses, together with the Windows key events arriving through the receiver.
+
+**Mode switch and cable.** With the mode switch on 2.4 GHz the cable only charges: no `PID 0x5030` interface appears
+and the receiver keeps relaying. Setting the switch to USB makes the wired interface appear and the receiver report
+byte 3 = 1; setting it back to 2.4 GHz removes the wired interface and the keyboard answers through the receiver
+right away. Both directions were verified with the driver running (2026-10-31).
 
 **Never send `F8`.** With the sequence `F8 55 AA 55 AA 00 00 82` it switches the receiver into its firmware-update
 mode (vendor `boot_rf`).
