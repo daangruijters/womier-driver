@@ -22,6 +22,7 @@ public sealed class TrayIconController : IDisposable
     private readonly Action _exit;
     private readonly TaskbarIcon _icon;
     private bool _wasConnected = true;
+    private bool _trayUpdateFailed;
 
     public TrayIconController(AppServices services, Action showWindow, Action exit)
     {
@@ -65,12 +66,6 @@ public sealed class TrayIconController : IDisposable
     {
         var engine = _services.Engine;
         var connected = engine.IsConnected;
-        if (connected != _wasConnected)
-        {
-            _icon.IconSource = new BitmapImage(connected ? OnlineIcon : OfflineIcon);
-            _wasConnected = connected;
-        }
-
         var line2 = !connected || engine.IsKeyboardAsleep
             ? ConnectionDescription.Describe(engine)
             : engine.ActiveProfile is null
@@ -81,7 +76,33 @@ public sealed class TrayIconController : IDisposable
                     ActivationReason.Manual => $"{engine.ActiveProfile.Name} · manual",
                     _ => engine.ActiveProfile.Name,
                 };
-        _icon.ToolTipText = $"Womier SK75 TMR\n{line2}";
+        try
+        {
+            if (!_icon.IsCreated)
+            {
+                _icon.ForceCreate(enablesEfficiencyMode: false);
+            }
+
+            if (connected != _wasConnected)
+            {
+                _icon.IconSource = new BitmapImage(connected ? OnlineIcon : OfflineIcon);
+                _wasConnected = connected;
+            }
+
+            _icon.ToolTipText = $"Womier SK75 TMR\n{line2}";
+            _trayUpdateFailed = false;
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The shell refuses tray updates while its notification area is unavailable (seen around a locked
+            // session). That must never become an error dialog; the next state change simply tries again.
+            if (!_trayUpdateFailed)
+            {
+                _services.Log.Warn($"Tray icon update failed: {ex.Message}");
+                _trayUpdateFailed = true;
+            }
+        }
+
         if (_icon.ContextMenu is { IsOpen: false })
         {
             RebuildMenu();
