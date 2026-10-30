@@ -52,6 +52,11 @@ public sealed partial class DriverEngine
                     {
                         await _keyboard.SetLiveReportingAsync(false, cancellationToken).ConfigureAwait(false);
                     }
+                    catch (KeyboardAsleepException)
+                    {
+                        // A sleeping keyboard does not stream anything; nothing to switch off.
+                        MarkKeyboardAsleep();
+                    }
                     catch (Exception ex) when (IsDeviceFailure(ex))
                     {
                         HandleDeviceFailure(ex);

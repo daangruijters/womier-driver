@@ -86,6 +86,40 @@ public class KeyboardTests
     }
 
     [Fact]
+    public async Task Write_SkipsEverythingWhenTheKeyboardAlreadyHoldsTheSettings()
+    {
+        var fake = new FakeRy5088Device();
+        var keyboard = await Sk75Keyboard.TryConnectAsync(fake, false, NullLogger.Instance);
+        var keys = Profile.CreateUniform("Gaming", KeySettings.Gaming).Keys;
+
+        Assert.True((await keyboard!.WriteKeySettingsAsync(keys)).Success);
+        fake.SentPackets.Clear();
+
+        var again = await keyboard.WriteKeySettingsAsync(keys);
+
+        Assert.True(again.Success, again.Message);
+        Assert.Contains("already up to date", again.Message);
+        Assert.Equal(1, fake.CommitCount);
+        Assert.DoesNotContain(fake.SentPackets, p => p[0] == Opcode.SetMultiMagnetism);
+    }
+
+    [Fact]
+    public async Task Write_StillWritesAllTablesWhenOneKeyDiffers()
+    {
+        var fake = new FakeRy5088Device();
+        var keyboard = await Sk75Keyboard.TryConnectAsync(fake, false, NullLogger.Instance);
+        var profile = Profile.CreateUniform("P", KeySettings.VendorDefault with { ActuationMm = 2.8, ReleaseMm = 2.8 });
+        profile.SetKey(14, profile.GetKey(14) with { ActuationMm = 1.5 });
+
+        var result = await keyboard!.WriteKeySettingsAsync(profile.Keys);
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(1, fake.CommitCount);
+        Assert.Equal(28, fake.SentPackets.Count(p => p[0] == Opcode.SetMultiMagnetism)); // vendor sequence unchanged
+        Assert.Equal(150, fake.U16(MagnetismStream.Travel)[14]);
+    }
+
+    [Fact]
     public async Task Write_ReportsMismatchesInsteadOfLying()
     {
         var fake = new FakeRy5088Device { IgnoreWrites = true };

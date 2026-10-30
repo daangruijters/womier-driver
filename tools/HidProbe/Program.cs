@@ -14,13 +14,16 @@ using WomierDriver.Core.Protocol;
 //   hidprobe set <code> <mm>     set one key's actuation point (e.g. "set KeyW 1.2"), then read it back
 //   hidprobe fill <stream> <raw> overwrite a whole per-key table with one raw value (recovery tool, use with care)
 //   hidprobe watch               print plug / unplug events until Enter is pressed
+//   hidprobe receiver            status of the 2.4 GHz receiver and its keyboard (works while the keyboard sleeps)
 //   hidprobe live                switch on the firmware's live travel reports and print them until Enter is pressed
 //   hidprobe travel [seconds]    poll the live travel table (254) and print keys whose value changes
 //   --fast                       with any command: 1 ms instead of 10 ms between a request and reading its answer
+//   --trace                      with any command over the receiver: log every receiver status while waiting
 
 var log = new ConsoleLogger();
 var fast = args.Any(a => a.Equals("--fast", StringComparison.OrdinalIgnoreCase));
-args = args.Where(a => !a.Equals("--fast", StringComparison.OrdinalIgnoreCase)).ToArray();
+var trace = args.Any(a => a.Equals("--trace", StringComparison.OrdinalIgnoreCase));
+args = args.Where(a => !a.StartsWith("--", StringComparison.Ordinal)).ToArray();
 var command = args.Length > 0 ? args[0].ToLowerInvariant() : "info";
 
 var interfaces = KeyboardLocator.FindConfigurationInterfaces();
@@ -42,11 +45,39 @@ if (command == "watch")
     return 0;
 }
 
+if (command == "receiver")
+{
+    // Receiver-local queries only: they work while the keyboard sleeps and never reach the keyboard.
+    var receiver = interfaces.FirstOrDefault(i => i.IsDongle);
+    if (receiver is null)
+    {
+        Console.WriteLine("No 2.4 GHz receiver found.");
+        return 1;
+    }
+
+    using var raw = HidSharpFeatureChannel.Open(receiver.Device, ReceiverRelayChannel.ReceiverReadDelayMs);
+    var version = await raw.ExchangeAsync(Ry5088Packets.Command(Opcode.ReceiverGetVersion));
+    Console.WriteLine($"Receiver firmware: {version[1] | (version[2] << 8)} (answer {Convert.ToHexString(version, 0, 8)})");
+    using var relay = new ReceiverRelayChannel(raw, log);
+    var status = await relay.GetStatusAsync();
+    Console.WriteLine($"Keyboard {(status.KeyboardConnected ? "connected" : "asleep or not connected")}, battery {status.BatteryPercent} %, answer ready {status.AnswerReady}, command delivered {status.CommandDelivered}");
+    return 0;
+}
+
 Sk75Keyboard? keyboard = null;
 foreach (var iface in interfaces)
 {
-    var channel = HidSharpFeatureChannel.Open(iface.Device, fast ? 1 : 10);
-    keyboard = await Sk75Keyboard.TryConnectAsync(channel, iface.IsDongle, log);
+    var raw = HidSharpFeatureChannel.Open(iface.Device, iface.IsDongle ? ReceiverRelayChannel.ReceiverReadDelayMs : fast ? 1 : 10);
+    IFeatureChannel channel = iface.IsDongle ? new ReceiverRelayChannel(raw, log) { Trace = trace } : raw;
+    try
+    {
+        keyboard = await Sk75Keyboard.TryConnectAsync(channel, iface.IsDongle, log);
+    }
+    catch (KeyboardAsleepException ex)
+    {
+        Console.WriteLine($"Receiver: {ex.Message}");
+    }
+
     if (keyboard is not null)
     {
         break;

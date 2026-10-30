@@ -71,8 +71,8 @@ public sealed class TrayIconController : IDisposable
             _wasConnected = connected;
         }
 
-        var line2 = !connected
-            ? "Keyboard not connected"
+        var line2 = !connected || engine.IsKeyboardAsleep
+            ? ConnectionDescription.Describe(engine)
             : engine.ActiveProfile is null
                 ? "No profile"
                 : engine.ActiveReason switch
@@ -96,7 +96,9 @@ public sealed class TrayIconController : IDisposable
 
         menu.Items.Add(new MenuItem
         {
-            Header = engine.IsConnected ? $"SK75 TMR · {engine.Keyboard!.ConnectionLabel} · fw {engine.Keyboard.FirmwareLabel}" : "SK75 TMR · not connected",
+            Header = ConnectionDescription.Battery(engine) is { } battery
+                ? $"{ConnectionDescription.Describe(engine)} · {battery}"
+                : ConnectionDescription.Describe(engine),
             IsEnabled = false,
         });
         menu.Items.Add(new Separator());
@@ -143,6 +145,12 @@ public sealed class TrayIconController : IDisposable
     {
         if (!e.ProfileChanged || !_services.Engine.Settings.NotifyOnProfileSwitch)
         {
+            return;
+        }
+
+        if (!e.Result.Success && _services.Engine.IsKeyboardAsleep)
+        {
+            Notify("Profile switch pending", $"{e.Profile.Name} is written to the keyboard as soon as it wakes up.");
             return;
         }
 

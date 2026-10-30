@@ -104,6 +104,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
     {
         _hotplugSubscription = KeyboardLocator.Subscribe(OnHidListChanged);
         await RescanAsync().ConfigureAwait(false);
+        StartReceiverWatch();
         _watcher.Start();
         ScheduleEvaluate("startup");
     }
@@ -156,22 +157,28 @@ public sealed partial class DriverEngine : IAsyncDisposable
             var interfaces = KeyboardLocator.FindConfigurationInterfaces();
             if (_keyboard is not null)
             {
-                if (interfaces.Any(i => string.Equals(i.Path, _keyboard.Info.DevicePath, StringComparison.OrdinalIgnoreCase)))
+                var stillThere = interfaces.Any(i => string.Equals(i.Path, _keyboard.Info.DevicePath, StringComparison.OrdinalIgnoreCase));
+
+                // The cable wins over the receiver: plugging it in switches the keyboard to USB.
+                var cableArrived = _keyboard.Info.IsDongle && interfaces.Any(i => !i.IsDongle);
+                if (stillThere && !cableArrived)
                 {
                     return;
                 }
 
-                _log.Info("Keyboard interface disappeared.");
+                _log.Info(cableArrived ? "Keyboard cable connected; switching from the receiver to USB." : "Keyboard interface disappeared.");
                 DisposeKeyboard();
                 changed = true;
             }
 
+            var sleepingReceiver = (HidInterfaceInfo?)null;
             foreach (var iface in interfaces)
             {
-                HidSharpFeatureChannel? channel = null;
+                IFeatureChannel? channel = null;
                 try
                 {
-                    channel = HidSharpFeatureChannel.Open(iface.Device);
+                    var raw = HidSharpFeatureChannel.Open(iface.Device, iface.IsDongle ? ReceiverRelayChannel.ReceiverReadDelayMs : 10);
+                    channel = iface.IsDongle ? new ReceiverRelayChannel(raw, _log) : raw;
                     var keyboard = await Sk75Keyboard.TryConnectAsync(channel, iface.IsDongle, _log, _lifetime.Token).ConfigureAwait(false);
                     if (keyboard is null)
                     {
@@ -184,6 +191,12 @@ public sealed partial class DriverEngine : IAsyncDisposable
 
                     _keyboard = keyboard;
                     Keyboard = keyboard.Info;
+                    _receiver = channel as ReceiverRelayChannel;
+                    if (_receiver?.LastStatus is { } status)
+                    {
+                        UpdateReceiverState(status);
+                    }
+
                     _appliedProfileId = null;
                     _appliedSignature = null;
                     changed = true;
@@ -200,11 +213,31 @@ public sealed partial class DriverEngine : IAsyncDisposable
                     channel?.Dispose();
                     return;
                 }
+                catch (KeyboardAsleepException)
+                {
+                    channel?.Dispose();
+                    sleepingReceiver = iface;
+                }
                 catch (Exception ex)
                 {
                     _log.Warn($"Could not use {iface.Path}: {ex.Message}");
                     channel?.Dispose();
                 }
+            }
+
+            // Remember a receiver whose keyboard sleeps: the receiver poll connects it as soon as it wakes up.
+            var waiting = _keyboard is null ? sleepingReceiver : null;
+            if (waiting is not null && _sleepingReceiver is null)
+            {
+                _log.Info("The keyboard behind the 2.4 GHz receiver is asleep; it connects as soon as a key is pressed.");
+            }
+
+            if (!Equals(waiting?.Path, _sleepingReceiver?.Path))
+            {
+                DisposeReceiverProbe();
+                _sleepingReceiver = waiting;
+                _keyboardAsleep = waiting is not null;
+                changed = true;
             }
         }
         finally
@@ -260,6 +293,11 @@ public sealed partial class DriverEngine : IAsyncDisposable
 
             return await _keyboard.ReadKeySettingsAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (KeyboardAsleepException)
+        {
+            MarkKeyboardAsleep();
+            return null;
+        }
         catch (Exception ex) when (IsDeviceFailure(ex))
         {
             HandleDeviceFailure(ex);
@@ -293,6 +331,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
             // Dispose must not hang on a stuck device operation.
         }
 
+        DisposeReceiverProbe();
         if (_keyboard is not null && _liveSource is not null)
         {
             // Best effort: leave the keyboard quiet. _lifetime is already cancelled, so use a token of our own.
@@ -462,6 +501,13 @@ public sealed partial class DriverEngine : IAsyncDisposable
 
                 LastApply = new ApplyStatus(DateTimeOffset.Now, result.Success, result.Message, profile.Name);
             }
+            catch (KeyboardAsleepException)
+            {
+                // Not a failure of the device: the write happens when the receiver reports the keyboard awake again.
+                MarkKeyboardAsleep();
+                result = ApplyResult.Failed("Keyboard asleep; written as soon as it wakes up");
+                LastApply = new ApplyStatus(DateTimeOffset.Now, false, result.Message, profile.Name);
+            }
             catch (Exception ex) when (IsDeviceFailure(ex))
             {
                 result = ApplyResult.Failed(ex.Message);
@@ -476,6 +522,10 @@ public sealed partial class DriverEngine : IAsyncDisposable
                     try
                     {
                         await _keyboard.SetLiveReportingAsync(true, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (KeyboardAsleepException)
+                    {
+                        MarkKeyboardAsleep();
                     }
                     catch (Exception ex) when (IsDeviceFailure(ex))
                     {
@@ -505,6 +555,9 @@ public sealed partial class DriverEngine : IAsyncDisposable
     private void DisposeKeyboard()
     {
         StopLiveSourceLocked();
+        _receiver = null; // disposed together with the keyboard, which owns the channel
+        _keyboardAsleep = false;
+        BatteryPercent = null;
         _keyboard?.Dispose();
         _keyboard = null;
         Keyboard = null;

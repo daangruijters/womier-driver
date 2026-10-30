@@ -132,13 +132,22 @@ public sealed class Sk75Keyboard : IDisposable
         var stopwatch = Stopwatch.StartNew();
         var scale = Info.Scale;
 
-        var modes = await ReadTableAsync(MagnetismStream.KeyModes, cancellationToken).ConfigureAwait(false);
-        var travel = Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.Travel, cancellationToken).ConfigureAwait(false));
-        var lift = Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.LiftTravel, cancellationToken).ConfigureAwait(false));
-        var firePress = Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.FirePressTravel, cancellationToken).ConfigureAwait(false));
-        var fireLift = Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.FireLiftTravel, cancellationToken).ConfigureAwait(false));
-        var deadZone = Ry5088Packets.DecodeU16Table(await ReadTableAsync(MagnetismStream.DeadZoneTravel, cancellationToken).ConfigureAwait(false));
-        var topDeadZone = Info.SupportsTopDeadZone ? await ReadTableAsync(MagnetismStream.TopDeadZoneTravel, cancellationToken).ConfigureAwait(false) : null;
+        // Keep what the keyboard holds now: when the patched tables come out identical, nothing is written at all.
+        var current = new Dictionary<MagnetismStream, byte[]>();
+        async Task<byte[]> ReadCurrentAsync(MagnetismStream stream)
+        {
+            var table = await ReadTableAsync(stream, cancellationToken).ConfigureAwait(false);
+            current[stream] = table;
+            return table.ToArray();
+        }
+
+        var modes = await ReadCurrentAsync(MagnetismStream.KeyModes).ConfigureAwait(false);
+        var travel = Ry5088Packets.DecodeU16Table(await ReadCurrentAsync(MagnetismStream.Travel).ConfigureAwait(false));
+        var lift = Ry5088Packets.DecodeU16Table(await ReadCurrentAsync(MagnetismStream.LiftTravel).ConfigureAwait(false));
+        var firePress = Ry5088Packets.DecodeU16Table(await ReadCurrentAsync(MagnetismStream.FirePressTravel).ConfigureAwait(false));
+        var fireLift = Ry5088Packets.DecodeU16Table(await ReadCurrentAsync(MagnetismStream.FireLiftTravel).ConfigureAwait(false));
+        var deadZone = Ry5088Packets.DecodeU16Table(await ReadCurrentAsync(MagnetismStream.DeadZoneTravel).ConfigureAwait(false));
+        var topDeadZone = Info.SupportsTopDeadZone ? await ReadCurrentAsync(MagnetismStream.TopDeadZoneTravel).ConfigureAwait(false) : null;
 
         var written = 0;
         foreach (var (slot, requested) in keys)
@@ -183,6 +192,14 @@ public sealed class Sk75Keyboard : IDisposable
         if (topDeadZone is not null)
         {
             tables.Add((MagnetismStream.TopDeadZoneTravel, topDeadZone));
+        }
+
+        if (tables.All(t => t.Payload.AsSpan().SequenceEqual(current[t.Stream])))
+        {
+            // Saves flash wear, and a lot of time over 2.4 GHz where every packet is relayed by the receiver.
+            stopwatch.Stop();
+            _log.Info($"All {written} keys already hold these settings; nothing written ({stopwatch.ElapsedMilliseconds} ms).");
+            return new ApplyResult(true, $"{written} keys already up to date", written, 0, stopwatch.Elapsed);
         }
 
         for (var i = 0; i < tables.Count; i++)

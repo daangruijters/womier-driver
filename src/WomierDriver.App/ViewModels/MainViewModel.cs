@@ -42,6 +42,10 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private Brush _connectionBrush = Brushes.Gray;
 
+    /// <summary>"Battery 80 %" while the keyboard uses its 2.4 GHz receiver; <c>null</c> otherwise.</summary>
+    [ObservableProperty]
+    private string? _batteryText;
+
     [ObservableProperty]
     private string _activeSummaryText = string.Empty;
 
@@ -698,12 +702,13 @@ public sealed partial class MainViewModel : ObservableObject
             IsLiveViewEnabled = false;
         }
 
-        ConnectionText = keyboard is null
-            ? "Keyboard not connected"
-            : $"Connected · {keyboard.ConnectionLabel} · firmware {keyboard.FirmwareLabel}";
-        ConnectionBrush = keyboard is null
-            ? Application.Current.TryFindResource("TextFillColorTertiaryBrush") as Brush ?? Brushes.Gray
-            : Application.Current.TryFindResource("SystemFillColorSuccessBrush") as Brush ?? Brushes.Green;
+        ConnectionText = ConnectionDescription.Describe(_engine);
+        BatteryText = ConnectionDescription.Battery(_engine);
+        ConnectionBrush = _engine.IsKeyboardAsleep
+            ? Application.Current.TryFindResource("SystemFillColorCautionBrush") as Brush ?? Brushes.Orange
+            : keyboard is null
+                ? Application.Current.TryFindResource("TextFillColorTertiaryBrush") as Brush ?? Brushes.Gray
+                : Application.Current.TryFindResource("SystemFillColorSuccessBrush") as Brush ?? Brushes.Green;
 
         var limits = _engine.Limits;
         if (Math.Abs(KeyViewModel.ScaleMax - limits.TravelMax) > 0.001 || Math.Abs(KeyViewModel.ScaleMin - limits.TravelMin) > 0.001)
