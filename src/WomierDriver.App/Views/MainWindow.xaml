@@ -39,8 +39,11 @@
               <Ellipse Width="8" Height="8" Fill="{Binding ConnectionBrush}" VerticalAlignment="Center" Margin="0,1,8,0" />
               <TextBlock Text="{Binding ConnectionText}" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
             </StackPanel>
-            <TextBlock Text="{Binding BatteryText}" Margin="16,3,0,0" Style="{StaticResource SecondaryCaptionStyle}"
-                       Visibility="{Binding BatteryText, Converter={StaticResource NullToCollapsed}}" />
+            <StackPanel Orientation="Horizontal" Margin="16,3,0,0" Visibility="{Binding BatteryText, Converter={StaticResource NullToCollapsed}}">
+              <TextBlock Text="{Binding BatteryGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center"
+                         Foreground="{Binding BatteryBrush}" Margin="0,0,6,0" AutomationProperties.Name="Battery" />
+              <TextBlock Text="{Binding BatteryText}" Style="{StaticResource SecondaryCaptionStyle}" VerticalAlignment="Center" />
+            </StackPanel>
             <TextBlock Text="{Binding ActiveSummaryText}" Margin="16,3,0,0" Style="{StaticResource SecondaryCaptionStyle}" />
           </StackPanel>
         </Border>
@@ -84,6 +87,8 @@
       <StackPanel Grid.Row="3" Margin="8,10,8,0">
         <CheckBox Content="Switch profiles automatically" IsChecked="{Binding AutoSwitchEnabled}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6" />
         <CheckBox Content="Notify on profile switch" IsChecked="{Binding NotifyOnSwitch}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6" />
+        <CheckBox Content="Notify when battery is low" IsChecked="{Binding NotifyOnLowBattery}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6"
+                  ToolTip="Over 2.4 GHz: a notification at 20 % and again at 10 % battery" />
         <CheckBox Content="Start with Windows" IsChecked="{Binding StartWithWindows}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6" />
       </StackPanel>
     </Grid>

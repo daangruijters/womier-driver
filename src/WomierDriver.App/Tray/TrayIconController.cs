@@ -23,6 +23,7 @@ public sealed class TrayIconController : IDisposable
     private readonly TaskbarIcon _icon;
     private bool _wasConnected = true;
     private bool _trayUpdateFailed;
+    private readonly BatteryAlerts _batteryAlerts = new();
 
     public TrayIconController(AppServices services, Action showWindow, Action exit)
     {
@@ -89,7 +90,9 @@ public sealed class TrayIconController : IDisposable
                 _wasConnected = connected;
             }
 
-            _icon.ToolTipText = $"Womier SK75 TMR\n{line2}";
+            _icon.ToolTipText = ConnectionDescription.Battery(engine) is { } battery
+                ? $"Womier SK75 TMR\n{line2}\n{battery}"
+                : $"Womier SK75 TMR\n{line2}";
             _trayUpdateFailed = false;
         }
         catch (InvalidOperationException ex)
@@ -106,6 +109,29 @@ public sealed class TrayIconController : IDisposable
         if (_icon.ContextMenu is { IsOpen: false })
         {
             RebuildMenu();
+        }
+
+        CheckBattery();
+    }
+
+    /// <summary>Warns once at 20 % and once more at 10 % (see <see cref="BatteryAlerts"/>).</summary>
+    private void CheckBattery()
+    {
+        var percent = ConnectionDescription.BatteryPercent(_services.Engine);
+        var alert = _batteryAlerts.Update(percent);
+        if (alert == BatteryAlert.None || !_services.Engine.Settings.NotifyOnLowBattery)
+        {
+            return;
+        }
+
+        _services.Log.Info($"Keyboard battery at {percent} %.");
+        if (alert == BatteryAlert.Critical)
+        {
+            Notify("Keyboard battery almost empty", $"{percent} % left. Connect the cable to charge it; it keeps working while charging.");
+        }
+        else
+        {
+            Notify("Keyboard battery low", $"{percent} % left. Connect the cable to charge it soon.");
         }
     }
 

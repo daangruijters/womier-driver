@@ -28,7 +28,8 @@ switches profiles automatically when a game is running.
 * **Cable or 2.4 GHz** – talks to the keyboard itself, on its USB cable or through its 2.4 GHz receiver (the
   cable wins when both are connected); no vendor processes are needed. Every write is verified by reading the
   keyboard back, and nothing is written when the keyboard already holds the settings. Over 2.4 GHz the sidebar
-  shows the battery level and when the keyboard sleeps; a profile switch that happens while it sleeps is written
+  and the tray tooltip show the battery level and when the keyboard sleeps, a notification warns at 20 % and
+  again at 10 % battery (*Notify when battery is low*); a profile switch that happens while it sleeps is written
   as soon as you press a key.
 * **Light and dark** – WPF Fluent theme following the Windows theme and accent colour.
 

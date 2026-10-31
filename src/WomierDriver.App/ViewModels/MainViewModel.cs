@@ -46,6 +46,14 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string? _batteryText;
 
+    /// <summary>Battery glyph (Segoe Fluent Icons) matching <see cref="BatteryText"/>.</summary>
+    [ObservableProperty]
+    private string _batteryGlyph = string.Empty;
+
+    /// <summary>Caution / critical colour while the battery is low, the secondary text colour otherwise.</summary>
+    [ObservableProperty]
+    private Brush _batteryBrush = Brushes.Gray;
+
     [ObservableProperty]
     private string _activeSummaryText = string.Empty;
 
@@ -136,6 +144,22 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             _engine.MutateSettings(s => s.NotifyOnProfileSwitch = value);
+            _services.SaveSettingsSoon();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool NotifyOnLowBattery
+    {
+        get => _engine.Settings.NotifyOnLowBattery;
+        set
+        {
+            if (value == _engine.Settings.NotifyOnLowBattery)
+            {
+                return;
+            }
+
+            _engine.MutateSettings(s => s.NotifyOnLowBattery = value);
             _services.SaveSettingsSoon();
             OnPropertyChanged();
         }
@@ -704,6 +728,17 @@ public sealed partial class MainViewModel : ObservableObject
 
         ConnectionText = ConnectionDescription.Describe(_engine);
         BatteryText = ConnectionDescription.Battery(_engine);
+        if (ConnectionDescription.BatteryPercent(_engine) is { } battery)
+        {
+            BatteryGlyph = ConnectionDescription.BatteryGlyph(battery);
+            BatteryBrush = BatteryAlerts.Classify(battery) switch
+            {
+                BatteryAlert.Critical => Application.Current.TryFindResource("SystemFillColorCriticalBrush") as Brush ?? Brushes.Red,
+                BatteryAlert.Low => Application.Current.TryFindResource("SystemFillColorCautionBrush") as Brush ?? Brushes.Orange,
+                _ => Application.Current.TryFindResource("TextFillColorSecondaryBrush") as Brush ?? Brushes.Gray,
+            };
+        }
+
         ConnectionBrush = _engine.IsKeyboardAsleep
             ? Application.Current.TryFindResource("SystemFillColorCautionBrush") as Brush ?? Brushes.Orange
             : keyboard is null
