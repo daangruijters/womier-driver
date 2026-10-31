@@ -55,6 +55,9 @@ keyboard, so do not let them apply different profiles at the same time.
   poll, fetch `FC`; see `docs/protocol.md` §7). Never send `F8` (receiver firmware-update mode). A sleeping keyboard is
   a normal state (`KeyboardAsleepException`), not a device failure: keep the connection, postpone writes, let the
   receiver poll in `DriverEngine.Receiver.cs` pick up the wake-up. Test receiver logic with `FakeReceiver`.
+* **Lighting.** `SET_LEDPARAM` (`07`) is sent with the `Bit8` checksum (byte 8; bytes 5..7 hold the colour) and
+  verified by reading `87` back with `LightingSettings.LooksLike`. A profile's lighting is optional: `null` means
+  "leave the keyboard's lighting alone", never "switch it off". Per-key colour pictures (`0x0C`) are not written.
 * **Live view.** Never send the calibration opcodes `0x1C` / `0x1E` (they re-learn the switch calibration; they
   are deliberately absent from `Opcode`). The travel stream (`0x1B`) is owned by the engine: paused around every
   write, switched off on connect and dispose, dropped synchronously under the device gate when the keyboard goes

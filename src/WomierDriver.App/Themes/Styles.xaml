@@ -152,4 +152,55 @@
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
   </Style>
 
+  <!-- Tabs inside a card (Games / Lighting): RadioButtons with an accent underline under the selected one. -->
+  <Style x:Key="TabHeaderStyle" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,0,20,0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <StackPanel Background="Transparent">
+            <ContentPresenter Margin="0,0,0,4" RecognizesAccessKey="True" />
+            <Border x:Name="Underline" Height="3" Width="16" CornerRadius="1.5" HorizontalAlignment="Left" Background="Transparent" />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+              <Setter TargetName="Underline" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Round colour buttons of the lighting editor; the button's Background is the colour. -->
+  <Style x:Key="SwatchButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="Margin" Value="0,0,8,8" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Ring" CornerRadius="13" BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Background="{TemplateBinding Background}" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
 </ResourceDictionary>

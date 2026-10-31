@@ -6,7 +6,7 @@ using WomierDriver.Core.Logging;
 using WomierDriver.Core.Profiles;
 using WomierDriver.Core.Protocol;
 
-// Command-line diagnostics for the SK75 TMR. Read-only unless you use "set" or "fill".
+// Command-line diagnostics for the SK75 TMR. Read-only unless you use "set", "fill" or "light <effect>".
 //
 //   hidprobe                     list candidate interfaces and identify the keyboard
 //   hidprobe dump                print every key's current settings
@@ -17,6 +17,9 @@ using WomierDriver.Core.Protocol;
 //   hidprobe receiver            status of the 2.4 GHz receiver and its keyboard (works while the keyboard sleeps)
 //   hidprobe live                switch on the firmware's live travel reports and print them until Enter is pressed
 //   hidprobe travel [seconds]    poll the live travel table (254) and print keys whose value changes
+//   hidprobe light               print the backlight setting (raw answer and decoded)
+//   hidprobe light <effect> [brightness] [speed] [#RRGGBB|rainbow] [option]
+//                                set the backlight (effect by name, e.g. Wave, or number), then read it back
 //   --fast                       with any command: 1 ms instead of 10 ms between a request and reading its answer
 //   --trace                      with any command over the receiver: log every receiver status while waiting
 
@@ -65,6 +68,7 @@ if (command == "receiver")
 }
 
 Sk75Keyboard? keyboard = null;
+IFeatureChannel? keyboardChannel = null;
 foreach (var iface in interfaces)
 {
     var raw = HidSharpFeatureChannel.Open(iface.Device, iface.IsDongle ? ReceiverRelayChannel.ReceiverReadDelayMs : fast ? 1 : 10);
@@ -80,6 +84,7 @@ foreach (var iface in interfaces)
 
     if (keyboard is not null)
     {
+        keyboardChannel = channel;
         break;
     }
 
@@ -287,10 +292,79 @@ using (keyboard)
             return 0;
         }
 
+        case "light":
+        {
+            var answer = await keyboardChannel!.ExchangeAsync(Ry5088Packets.GetLighting());
+            Console.WriteLine();
+            Console.WriteLine($"Raw answer: {Convert.ToHexString(answer, 0, 16)}");
+            var current = await keyboard.ReadLightingAsync();
+            Console.WriteLine($"Lighting:   {(current is null ? "not recognised" : FormatLighting(current))}");
+            if (args.Length < 2)
+            {
+                return current is null ? 1 : 0;
+            }
+
+            if (!TryParseEffect(args[1], out var effect))
+            {
+                Console.WriteLine("usage: hidprobe light <effect> [brightness 0-4] [speed 0-4] [#RRGGBB|rainbow] [option]");
+                Console.WriteLine("effects: " + string.Join(", ", Sk75Lighting.Effects.Select(e => $"{e.Effect} ({(int)e.Effect})")));
+                return 2;
+            }
+
+            var wanted = (current ?? new LightingSettings()) with { Effect = effect };
+            if (args.Length > 2)
+            {
+                wanted = wanted with { Brightness = int.Parse(args[2], CultureInfo.InvariantCulture) };
+            }
+
+            if (args.Length > 3)
+            {
+                wanted = wanted with { Speed = int.Parse(args[3], CultureInfo.InvariantCulture) };
+            }
+
+            if (args.Length > 4)
+            {
+                if (args[4].Equals("rainbow", StringComparison.OrdinalIgnoreCase))
+                {
+                    wanted = wanted with { Rainbow = true };
+                }
+                else if (RgbColor.TryParse(args[4], out var color))
+                {
+                    wanted = wanted with { Rainbow = false, Color = color };
+                }
+            }
+
+            if (args.Length > 5)
+            {
+                wanted = wanted with { Option = int.Parse(args[5], CultureInfo.InvariantCulture) };
+            }
+
+            Console.WriteLine($"Setting:    {FormatLighting(wanted.Sanitized())}  packet {Convert.ToHexString(Ry5088Packets.SetLighting(wanted), 0, 9)} (+ checksum)");
+            var result = await keyboard.WriteLightingAsync(wanted);
+            Console.WriteLine($"Write: {(result.Success ? "ok" : "FAILED")} - {result.Message} ({result.Duration.TotalMilliseconds:0} ms)");
+            answer = await keyboardChannel.ExchangeAsync(Ry5088Packets.GetLighting());
+            Console.WriteLine($"Raw answer: {Convert.ToHexString(answer, 0, 16)}");
+            return result.Success ? 0 : 1;
+        }
+
         default:
             Console.WriteLine($"Unknown command '{command}'.");
             return 2;
     }
+}
+
+static string FormatLighting(LightingSettings s)
+    => $"{s.Effect} ({(int)s.Effect}), brightness {s.Brightness}, speed {s.Speed}, {(s.Rainbow ? "rainbow" : s.Color.ToString())}, option {s.Option}";
+
+static bool TryParseEffect(string text, out LightingEffect effect)
+{
+    if (byte.TryParse(text, out var value))
+    {
+        effect = (LightingEffect)value;
+        return true;
+    }
+
+    return Enum.TryParse(text, ignoreCase: true, out effect);
 }
 
 internal sealed class ConsoleLogger : ILogger
