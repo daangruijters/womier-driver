@@ -52,13 +52,15 @@ Observed response behaviour:
 | `0xE5` | GET_MULTI_MAGNETISM | query | read one 64-byte chunk of a per-key table, see §4 |
 | `0x65` | SET_MULTI_MAGNETISM | command | write per-key tables, see §4 |
 | `0x1B` | SET_MAGNETISM_REPORT | command | byte 1 = 1 starts / 0 stops the live travel input reports, see §6; no answer |
+| `0x07` | SET_LEDPARAM | command | backlight effect, speed, brightness, colour; **Bit8** checksum, see §8 |
+| `0x87` | GET_LEDPARAM | query | the backlight setting in the layout of `0x07`, see §8 |
 | `0xF0` | (receiver) | query | answered by the 2.4 GHz receiver itself: bytes 1..2 = its firmware version (`F0 02 08 …` = 2050 on the SK75 TMR's receiver) |
 | `0xF7` | (receiver) | query | answered by the receiver itself, no checksum: status of the keyboard behind it, see §7 |
 | `0xFC` | (receiver) | command | no checksum: makes the receiver's next GET_FEATURE return the keyboard's answer to the last relayed command, see §7 |
 | `0xF1` | (receiver) | query | described in the vendor source as "paired keyboard id"; the SK75 TMR's receiver does not answer it |
 
-The vendor application also implements key remapping (`0x0A`/`0x8A`, `0x10`/`0x90`), lighting (`0x07`, `0x0C`),
-macros, sleep timers and firmware upgrade. Those are documented in the vendor source kept under
+The vendor application also implements key remapping (`0x0A`/`0x8A`, `0x10`/`0x90`), per-key colour patterns
+(`0x0C`), macros, sleep timers and firmware upgrade. Those are documented in the vendor source kept under
 `reverse-engineering/vendor/` and are intentionally **not** touched by this driver. The calibration commands
 `0x1C` and `0x1E` are deliberately not implemented at all (§6).
 
@@ -236,3 +238,56 @@ mode (vendor `boot_rf`).
 **Sharing the receiver.** The relay keeps state in the receiver (one answer buffer, one pending command). Two
 programs relaying at the same time can therefore read each other's answers. The vendor helper only relays while
 its own application is busy with the keyboard, so close the vendor application while this driver uses the receiver.
+
+## 8. Backlight
+
+One packet sets the effect of the whole keyboard, one reads it back (vendor `setLightSetting` / `getLightSetting`):
+
+```
+07 <effect> <4 - speed> <brightness> <option << 4 | colour mode> R G B <ck>    SET_LEDPARAM, checksum in byte 8
+87 00 00 00 00 00 00 <ck>                                                      GET_LEDPARAM, Bit7 checksum
+-> 87 <effect> <4 - speed> <brightness> <option << 4 | colour mode> R G B …
+```
+
+`SET_LEDPARAM` is the one command that uses the **Bit8** checksum: bytes 5..7 hold the colour, so the checksum
+covers bytes 0..7 and sits in byte 8. Brightness and speed run from 0 to 4; the speed byte counts down (0 = fastest).
+The vendor software waits 100 ms after the command.
+
+| Colour mode (low nibble of byte 4) | Meaning |
+|---|---|
+| 7 | the colour in bytes 5..7 |
+| 8 | all colours (vendor "dazzle") |
+| 0..6 | a firmware preset (red, orange, yellow, green, cyan, blue, purple), as chosen with the Fn shortcuts; only ever read |
+
+The vendor sends white as `FA FF FA` and reads `FA FF FA` back as white. For *Custom pattern* (effect 13) it sends
+colour mode 0, the fixed colour `00 C8 C8` and the pattern number (0..4) as the option; the patterns themselves are
+per-key colour tables written with `0x0C` (`SET_USERPIC`, 7 chunks of 56 bytes, 3 bytes per matrix slot), which this
+driver does not write.
+
+Effects offered for the SK75 TMR (vendor `lightLayout`; the option column lists the option values 0, 1, …):
+
+| Effect | Name | Speed | Colour | Option |
+|---|---|---|---|---|
+| 0 | Off | | | |
+| 1 | Always on | | yes | |
+| 2 | Breathing | yes | yes | |
+| 3 | Spectrum cycle (vendor "Neon") | yes | | |
+| 4 | Wave | yes | yes | right, left, down, up |
+| 5 | Ripple | yes | yes | |
+| 6 | Starlight | yes | yes | |
+| 7 | Stream (vendor "Snake") | yes | yes | zigzag, round |
+| 8 | Shadow | yes | yes | |
+| 9 | Mountain wave | yes | yes | |
+| 10 | Sine wave | yes | yes | |
+| 11 | Color spring | yes | yes | outward, inward |
+| 12 | Flower wave | yes | yes | right, left |
+| 13 | Custom pattern | | | pattern 1..5 |
+| 14 | Laser | yes | yes | |
+| 15 | Circle wave | yes | yes | counterclockwise, clockwise |
+| 16 | Colorful cross | yes | yes | |
+| 17 | Snow fall | yes | yes | |
+| 18 | Meteor | yes | yes | |
+| 19 | Snow trace | yes | yes | |
+
+Effects 20..25 (music follow, screen colour, …) need the vendor application to stream audio or screen data and are
+not offered. Side lights (`0x08` / `0x88`) do not exist on the SK75 TMR.

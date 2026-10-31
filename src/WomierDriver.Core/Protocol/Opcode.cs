@@ -10,6 +10,10 @@ public static class Opcode
     public const byte SetReset = 0x01;
     public const byte SetReportRate = 0x03;
     public const byte SetProfile = 0x04;
+
+    /// <summary>Sets the backlight effect, speed, brightness and colour (<see cref="Ry5088Packets.SetLighting"/>). Uses the <see cref="ChecksumKind.Bit8"/> checksum.</summary>
+    public const byte SetLighting = 0x07;
+
     public const byte SetKeyMatrix = 0x0A;
     public const byte SetFn = 0x10;
 
@@ -27,6 +31,10 @@ public static class Opcode
     public const byte GetRfVersion = 0x80;
     public const byte GetReportRate = 0x83;
     public const byte GetProfile = 0x84;
+
+    /// <summary>Reads the backlight setting; the answer has the layout of <see cref="SetLighting"/>.</summary>
+    public const byte GetLighting = 0x87;
+
     public const byte GetKeyMatrix = 0x8A;
     public const byte GetUsbVersion = 0x8F;
     public const byte GetFn = 0x90;

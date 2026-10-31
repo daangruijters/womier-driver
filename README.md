@@ -19,6 +19,10 @@ switches profiles automatically when a game is running.
   ![Live view](docs/images/live-view.png)
 * **Profiles** – create, duplicate, rename, import/export as JSON. One profile is the *default* and is used
   whenever no game is running.
+* **RGB lighting** – the *Lighting* tab next to *Games* lets a profile set the backlight: one of 19 effects (always
+  on, breathing, wave, ripple, starlight, …) with brightness, speed, direction, and a single colour or all colours.
+  It is written together with the profile's key settings, so a game can switch the lighting as well; a profile
+  with the lighting switched off leaves the keyboard's current lighting alone.
 * **Game rules** – attach process names (for example `bf6.exe`) to a profile, or pick them from the list of
   running programs. While such a process runs, its profile is written to the keyboard; when it exits, the
   default profile comes back.
@@ -112,6 +116,7 @@ dotnet run --project tools/HidProbe -- watch         # plug / unplug events
 dotnet run --project tools/HidProbe -- live 30       # print the keyboard's live travel reports for 30 s
 dotnet run --project tools/HidProbe -- travel 10     # poll the live travel table instead, 10 s
 dotnet run --project tools/HidProbe -- receiver      # 2.4 GHz receiver: keyboard awake?, battery (works while it sleeps)
+dotnet run --project tools/HidProbe -- light         # the backlight setting; "light Wave 4 2 #FF8000 1" sets one
 dotnet run --project tools/HidProbe -- dump --trace  # over 2.4 GHz: log every receiver status while relaying
 ```
 
@@ -140,8 +145,10 @@ docs/                    protocol, architecture, reverse-engineering notes and v
 ## Scope and limitations
 
 * Supports the SK75 TMR only (device id 2518). The layout, matrix slots and value ranges are specific to it.
-* Manages the analog settings (actuation, release, rapid trigger, dead zone). Key remapping, lighting, macros,
-  calibration and firmware updates remain in the vendor software; the driver never touches those tables.
+* Manages the analog settings (actuation, release, rapid trigger, dead zone) and the backlight effect. Key
+  remapping, per-key colour patterns, macros, calibration and firmware updates remain in the vendor software; the
+  driver never touches those tables. The *Custom pattern* effect shows the patterns drawn there. Music and screen
+  sync are not offered: they need the vendor application to stream audio or screen colours.
 * Advanced vendor key modes (DKS, mod-tap, toggle, snap tap) are reset to "normal" on keys the driver writes.
 * Settings are written to the on-board profile that is active on the keyboard, the same as the vendor software.
 * Top dead zone is only available on firmware 1024 and newer; the SK75 TMR ships with 776 (3.08).

@@ -48,6 +48,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
     private string? _lastAutoTrigger;
     private Guid? _appliedProfileId;
     private string? _appliedSignature;
+    private LightingSettings? _appliedLighting;
     private int _evaluateScheduled;
     private bool _disposed;
 
@@ -199,6 +200,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
 
                     _appliedProfileId = null;
                     _appliedSignature = null;
+                    _appliedLighting = null;
                     changed = true;
                     _log.Info($"Connected: {keyboard.Info}");
                     if (_liveRequested)
@@ -271,13 +273,15 @@ public sealed partial class DriverEngine : IAsyncDisposable
     {
         string signature;
         Dictionary<int, KeySettings> keys;
+        LightingSettings? lighting;
         lock (_stateLock)
         {
             signature = profile.KeySignature();
             keys = new Dictionary<int, KeySettings>(profile.Keys);
+            lighting = profile.Lighting;
         }
 
-        return ApplyInternalAsync(profile, keys, ActivationReason.Manual, signature, force: true, profileChanged: false, cancellationToken);
+        return ApplyInternalAsync(profile, keys, lighting, ActivationReason.Manual, signature, force: true, profileChanged: false, cancellationToken);
     }
 
     /// <summary>Reads the per-key settings currently stored in the keyboard; <c>null</c> when disconnected.</summary>
@@ -292,6 +296,30 @@ public sealed partial class DriverEngine : IAsyncDisposable
             }
 
             return await _keyboard.ReadKeySettingsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (KeyboardAsleepException)
+        {
+            MarkKeyboardAsleep();
+            return null;
+        }
+        catch (Exception ex) when (IsDeviceFailure(ex))
+        {
+            HandleDeviceFailure(ex);
+            return null;
+        }
+        finally
+        {
+            _deviceGate.Release();
+        }
+    }
+
+    /// <summary>Reads the keyboard's current backlight setting; <c>null</c> when disconnected, asleep or not answering.</summary>
+    public async Task<LightingSettings?> ReadLightingAsync(CancellationToken cancellationToken = default)
+    {
+        await _deviceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return _keyboard is null ? null : await _keyboard.ReadLightingAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (KeyboardAsleepException)
         {
@@ -406,6 +434,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
         ProfileSelection selection;
         string? signature = null;
         Dictionary<int, KeySettings>? keys = null;
+        LightingSettings? lighting = null;
         bool profileChanged;
         lock (_stateLock)
         {
@@ -437,6 +466,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
             {
                 signature = selection.Profile.KeySignature();
                 keys = new Dictionary<int, KeySettings>(selection.Profile.Keys);
+                lighting = selection.Profile.Lighting;
             }
         }
 
@@ -447,19 +477,20 @@ public sealed partial class DriverEngine : IAsyncDisposable
             return;
         }
 
-        if (_appliedProfileId == selection.Profile.Id && _appliedSignature == signature)
+        if (_appliedProfileId == selection.Profile.Id && _appliedSignature == signature && (lighting is null || lighting == _appliedLighting))
         {
             return;
         }
 
         var trigger = selection.MatchedProcess is null ? string.Empty : $", {selection.MatchedProcess}";
         _log.Info($"Applying '{selection.Profile.Name}' ({selection.Reason}{trigger}); trigger: {reason}.");
-        await ApplyInternalAsync(selection.Profile, keys, selection.Reason, signature, force: false, profileChanged, _lifetime.Token).ConfigureAwait(false);
+        await ApplyInternalAsync(selection.Profile, keys, lighting, selection.Reason, signature, force: false, profileChanged, _lifetime.Token).ConfigureAwait(false);
     }
 
     private async Task<ApplyResult> ApplyInternalAsync(
         Profile profile,
         IReadOnlyDictionary<int, KeySettings> keys,
+        LightingSettings? lighting,
         ActivationReason reason,
         string signature,
         bool force,
@@ -476,7 +507,9 @@ public sealed partial class DriverEngine : IAsyncDisposable
                 return ApplyResult.Failed("Keyboard is not connected");
             }
 
-            if (!force && _appliedProfileId == profile.Id && _appliedSignature == signature)
+            var writeKeys = force || _appliedProfileId != profile.Id || _appliedSignature != signature;
+            var writeLighting = lighting is not null && (force || _appliedProfileId != profile.Id || lighting != _appliedLighting);
+            if (!writeKeys && !writeLighting)
             {
                 return new ApplyResult(true, "Already applied", 0, 0, TimeSpan.Zero);
             }
@@ -492,12 +525,28 @@ public sealed partial class DriverEngine : IAsyncDisposable
                     await keyboard.SetLiveReportingAsync(false, cancellationToken).ConfigureAwait(false);
                 }
 
-                result = await keyboard.WriteKeySettingsAsync(keys, cancellationToken).ConfigureAwait(false);
-                if (result.Success)
+                ApplyResult? keysResult = null;
+                if (writeKeys)
                 {
-                    _appliedProfileId = profile.Id;
-                    _appliedSignature = signature;
+                    keysResult = await keyboard.WriteKeySettingsAsync(keys, cancellationToken).ConfigureAwait(false);
+                    if (keysResult.Success)
+                    {
+                        _appliedProfileId = profile.Id;
+                        _appliedSignature = signature;
+                    }
                 }
+
+                ApplyResult? lightingResult = null;
+                if (writeLighting)
+                {
+                    lightingResult = await keyboard.WriteLightingAsync(lighting!, cancellationToken).ConfigureAwait(false);
+                    if (lightingResult.Success)
+                    {
+                        _appliedLighting = lighting;
+                    }
+                }
+
+                result = Combine(keysResult, lightingResult);
 
                 LastApply = new ApplyStatus(DateTimeOffset.Now, result.Success, result.Message, profile.Name);
             }
@@ -544,6 +593,20 @@ public sealed partial class DriverEngine : IAsyncDisposable
         return result;
     }
 
+    /// <summary>One status line for a write of the keys, the lighting or both, e.g. "81 keys written and verified, lighting set".</summary>
+    private static ApplyResult Combine(ApplyResult? keys, ApplyResult? lighting)
+    {
+        if (keys is null || lighting is null)
+        {
+            var only = keys ?? lighting!;
+            return keys is null ? only with { Message = Capitalize(only.Message) } : only;
+        }
+
+        return new ApplyResult(keys.Success && lighting.Success, $"{keys.Message}, {lighting.Message}", keys.KeysWritten, keys.MismatchedKeys, keys.Duration + lighting.Duration);
+    }
+
+    private static string Capitalize(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
     /// <summary>Must be called while holding <see cref="_deviceGate"/>.</summary>
     private void HandleDeviceFailure(Exception ex)
     {
@@ -563,6 +626,7 @@ public sealed partial class DriverEngine : IAsyncDisposable
         Keyboard = null;
         _appliedProfileId = null;
         _appliedSignature = null;
+        _appliedLighting = null;
     }
 
     private void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);

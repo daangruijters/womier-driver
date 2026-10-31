@@ -77,11 +77,16 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string? _liveStatusText;
 
+    /// <summary>The profile card shows the lighting instead of the game rules. Session-only.</summary>
+    [ObservableProperty]
+    private bool _isLightingTabSelected;
+
     public MainViewModel(AppServices services)
     {
         _services = services;
         _engine = services.Engine;
         Editor = new SelectionEditorViewModel(ApplyToSelection);
+        Lighting = new LightingEditorViewModel(CommitLighting, () => _engine.ReadLightingAsync());
         foreach (var definition in Sk75TmrLayout.Keys)
         {
             var key = new KeyViewModel(definition);
@@ -114,6 +119,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<KeyViewModel> Keys { get; } = [];
 
     public SelectionEditorViewModel Editor { get; }
+
+    public LightingEditorViewModel Lighting { get; }
 
     public string VersionText => $"Driver {AppServices.Version}";
 
@@ -334,6 +341,7 @@ public sealed partial class MainViewModel : ObservableObject
             key.Settings = value?.Model.GetKey(key.Slot) ?? KeySettings.VendorDefault;
         }
 
+        Lighting.Load(value?.Model.Lighting);
         UpdateMarkers();
         RefreshLiveStatus();
         LoadSelectionIntoEditor();
@@ -602,6 +610,7 @@ public sealed partial class MainViewModel : ObservableObject
             imported.IsDefault = false;
             imported.Name = _engine.Library.UniqueName(string.IsNullOrWhiteSpace(imported.Name) ? Path.GetFileNameWithoutExtension(dialog.FileName) : imported.Name);
             imported.Keys = imported.Keys.Where(k => Sk75TmrLayout.Slots.Contains(k.Key)).ToDictionary(k => k.Key, k => k.Value.Clamp(_engine.Limits));
+            imported.Lighting = imported.Lighting?.Sanitized();
             _engine.MutateLibrary(lib => lib.Add(imported));
             _services.SaveLibrarySoon();
             var vm = new ProfileViewModel(imported, OnProfileMetadataChanged);
@@ -678,6 +687,27 @@ public sealed partial class MainViewModel : ObservableObject
             reevaluate: false);
 
         SelectedProfile.NotifyKeysChanged();
+        _services.SaveLibrarySoon();
+        _applyTimer.Stop();
+        _applyTimer.Start();
+    }
+
+    private void CommitLighting(LightingSettings? lighting)
+    {
+        if (SelectedProfile is null)
+        {
+            return;
+        }
+
+        var profile = SelectedProfile.Model;
+        _engine.MutateLibrary(
+            _ =>
+            {
+                profile.Lighting = lighting;
+                profile.Touch();
+            },
+            reevaluate: false);
+
         _services.SaveLibrarySoon();
         _applyTimer.Stop();
         _applyTimer.Start();

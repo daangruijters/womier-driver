@@ -1,3 +1,5 @@
+using WomierDriver.Core.Profiles;
+
 namespace WomierDriver.Core.Protocol;
 
 /// <summary>
@@ -14,6 +16,19 @@ public static class Ry5088Packets
 
     /// <summary>Offset of the data part inside a bulk chunk.</summary>
     public const int ChunkDataOffset = 8;
+
+    private const int LightingModeSingleColor = 7;
+    private const int LightingModeRainbow = 8;
+
+    /// <summary>How the vendor software sends white; the firmware tints it slightly to look neutral.</summary>
+    private static readonly RgbColor LightingWhite = new(0xFA, 0xFF, 0xFA);
+
+    /// <summary>Firmware preset colours 0..6: red, orange, yellow, green, cyan, blue, purple.</summary>
+    private static readonly RgbColor[] LightingPresetColors =
+    [
+        new(0xFF, 0x00, 0x00), new(0xFF, 0x80, 0x00), new(0xFF, 0xFF, 0x00), new(0x00, 0xFF, 0x00),
+        new(0x00, 0xFF, 0xFF), new(0x00, 0x00, 0xFF), new(0xFF, 0x00, 0xFF),
+    ];
 
     public static byte[] Command(byte opcode, params byte[] args)
     {
@@ -39,6 +54,73 @@ public static class Ry5088Packets
     public static byte[] GetReportRate() => Command(Opcode.GetReportRate);
 
     public static byte[] DongleGetPairedId() => Command(Opcode.DongleGetPairedId);
+
+    /// <summary>Asks for the backlight setting; decode the answer with <see cref="TryParseLighting"/>.</summary>
+    public static byte[] GetLighting() => Command(Opcode.GetLighting);
+
+    /// <summary>
+    /// Sets the backlight (<c>07 effect speed brightness mode R G B</c>, sent with the <see cref="ChecksumKind.Bit8"/> checksum).
+    /// Byte 2 counts down (0 = fastest), byte 4 holds the option in its high nibble and the colour mode in its low nibble
+    /// (7 = the colour in bytes 5..7, 8 = rainbow). Like the vendor software, pure white is sent as <c>FA FF FA</c> and
+    /// the custom pattern effect carries the fixed colour <c>00 C8 C8</c> and colour mode 0.
+    /// </summary>
+    public static byte[] SetLighting(LightingSettings settings)
+    {
+        var s = settings.Sanitized();
+        var color = s.Color == RgbColor.White ? LightingWhite : s.Color;
+        var mode = s.Rainbow ? LightingModeRainbow : LightingModeSingleColor;
+        if (s.Effect == LightingEffect.CustomPattern)
+        {
+            color = new RgbColor(0x00, 0xC8, 0xC8);
+            mode = 0;
+        }
+
+        return Command(
+            Opcode.SetLighting,
+            (byte)s.Effect,
+            (byte)(LightingSettings.MaxLevel - s.Speed),
+            (byte)s.Brightness,
+            (byte)((s.Option << 4) | mode),
+            color.R,
+            color.G,
+            color.B);
+    }
+
+    /// <summary>
+    /// Decodes the answer to <see cref="GetLighting"/>. A colour mode of 0..6 in the low nibble of byte 4 means one of the
+    /// firmware's preset colours (chosen with the Fn shortcuts); it is returned as that colour.
+    /// </summary>
+    public static bool TryParseLighting(ReadOnlySpan<byte> answer, out LightingSettings settings)
+    {
+        settings = new LightingSettings();
+        if (answer.Length < 8 || answer[0] != Opcode.GetLighting)
+        {
+            return false;
+        }
+
+        var mode = answer[4] & 0x0F;
+        var color = new RgbColor(answer[5], answer[6], answer[7]);
+        if (color == LightingWhite)
+        {
+            color = RgbColor.White;
+        }
+
+        if (mode < LightingPresetColors.Length)
+        {
+            color = LightingPresetColors[mode];
+        }
+
+        settings = new LightingSettings
+        {
+            Effect = (LightingEffect)answer[1],
+            Speed = LightingSettings.MaxLevel - Math.Min((int)answer[2], LightingSettings.MaxLevel),
+            Brightness = Math.Min((int)answer[3], LightingSettings.MaxLevel),
+            Option = answer[4] >> 4,
+            Rainbow = mode == LightingModeRainbow,
+            Color = color,
+        };
+        return true;
+    }
 
     /// <summary>Turns the live travel input reports on or off (<c>1B 01</c> / <c>1B 00</c>). The firmware sends no answer.</summary>
     public static byte[] SetMagnetismReport(bool enabled) => Command(Opcode.SetMagnetismReport, (byte)(enabled ? 1 : 0));
