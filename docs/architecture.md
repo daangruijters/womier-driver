@@ -62,6 +62,9 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
 
 * Interfaces are tried in `KeyboardLocator` order, cable first. A receiver gets a `ReceiverRelayChannel`; when its
   keyboard sleeps, the receiver is remembered as "waiting" instead of failing.
+* The battery level comes from the receiver status (byte 1); the keyboard reports none over its cable, where it
+  charges. `BatteryAlerts` (Core, unit tested) decides when the tray warns: once at 20 %, once at 10 %, again only
+  after the battery charged 5 points past a threshold.
 * `DriverEngine.Receiver.cs` polls the receiver every 2 s with the receiver-local status query (it never reaches the
   keyboard and skips a round when the device gate is busy). It tracks sleep and battery for the UI, identifies a
   keyboard that was asleep when the receiver appeared as soon as it wakes, and on wake-up re-evaluates, so a write
