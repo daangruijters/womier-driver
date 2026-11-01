@@ -6,13 +6,21 @@ which ships unpacked, minified JavaScript) and confirmed with live captures on t
 
 ## What is in `vendor/`
 
-| File | Origin | Why it is kept |
+The vendor's code is Womier's and is **not** part of the repository: the folder is git-ignored except for our
+own `sk75-layout.json`. `python tools/extract-vendor.py` fills it from an installed WOMIER Driver (formatted
+with Prettier through `npx` when Node.js is available). Write what you learn from it into `docs/protocol.md` in
+your own words; do not paste vendor code into tracked files.
+
+| File | Origin | What it is good for |
 |---|---|---|
-| `commonKBRY5088.pretty.js` | `dist/js/commonKBRY5088.*.js`, prettified | the RY5088 packet builders: every opcode, table sub-index, chunking rule and timing used in `docs/protocol.md` |
+| `commonKBRY5088.pretty.js` | `dist/js/commonKBRY5088.*.js` | the RY5088 packet builders: every opcode, table sub-index, chunking rule and timing used in `docs/protocol.md`, including key remapping (`getKeyMatrix`, `getFnKeyMatrix`, `setKeyConfig`) and macros |
 | `ry5088_womiersk75he_8k_8k.pretty.js` | `dist/js/ry5088_womiersk75he_8k_8k.*.js` | the SK75 device class with its factory key matrices (`defaultMatrix` etc.) |
-| `agk75b_ui_info.js` | `dist/js/keyboard_81_agk75b_keymappings_ui_info.*.js` | key geometry of the "Common81_AGK75B" layout that the SK75 TMR uses in the vendor UI |
-| `sk75-layout.json` | decoded from the matrices above | slot → HID usage table consumed by `tools/gen-layout.py` |
-| `iot_driver.proto` | recovered from the bundle in an earlier analysis | gRPC schema of the vendor's optional native helper; not used by this driver, kept for reference |
+| `agk75b_ui_info.js` | `dist/js/keyboard_81_agk75b_keymappings_ui_info.*.js` | key geometry of the "Common81_AGK75B" layout that the SK75 TMR uses in the vendor UI; read by `tools/gen-layout.py` |
+| `Keyboard_81_AGK75B_KeyMappings.*.pretty.js` | `dist/js/Keyboard_81_AGK75B_KeyMappings.*.js` | the vendor's key remapping screen for this layout |
+| `sk75-layout.json` (tracked) | decoded from the factory matrices | slot → HID usage table consumed by `tools/gen-layout.py` |
+
+The gRPC schema of the vendor's optional native helper (`iot_driver.proto`) was recovered in an earlier analysis;
+it is not used by this driver and is not kept. `history/phase2-findings.md` describes its messages.
 
 The vendor catalogue entry that identifies the model:
 

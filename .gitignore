@@ -27,3 +27,7 @@ Desktop.ini
 # Local-only
 *.local.json
 .claude/settings.local.json
+
+# Vendor sources (Womier's code): local reference only, restored with tools/extract-vendor.py
+docs/reverse-engineering/vendor/*
+!docs/reverse-engineering/vendor/sk75-layout.json

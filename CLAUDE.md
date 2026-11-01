@@ -19,9 +19,10 @@ src/WomierDriver.App/     WPF app: tray icon, main window, view models, Raw Inpu
 src/WomierDriver.Tests/   xunit tests incl. FakeRy5088Device, an in-memory firmware for end-to-end tests
 tools/HidProbe/           console diagnostics against the real keyboard (info, dump, raw, set, fill, watch)
 tools/gen-layout.py       regenerates Core/Device/Sk75TmrLayout.Keys.cs from docs/reverse-engineering/vendor
+tools/extract-vendor.py   restores the (git-ignored) vendor sources from the installed WOMIER Driver
 docs/protocol.md          the HID protocol as used here (verified live) – read before touching Protocol/ or Device/
 docs/architecture.md      components, threading model, data files
-docs/reverse-engineering/ provenance: prettified vendor sources and notes
+docs/reverse-engineering/ provenance notes; vendor/ holds the vendor sources locally (git-ignored)
 ```
 
 ## Commands
@@ -34,6 +35,7 @@ dotnet run --project tools/HidProbe -- dump         # read every key's current s
 dotnet run --project tools/HidProbe -- live 30      # print the firmware's live travel reports for 30 s
 dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish   # portable single exe (the release workflow packs it)
 dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish  # small, needs the runtime
+python tools/extract-vendor.py                      # copy the vendor sources into docs/reverse-engineering/vendor (local only)
 python tools/gen-layout.py                          # regenerate the key table after changing the vendor data
 git tag -a v0.2.0 -m "notes"; git push origin v0.2.0   # release: CI packs with Velopack and publishes (docs/releasing.md)
 ```
@@ -48,6 +50,9 @@ keyboard, so do not let them apply different profiles at the same time.
   to the keyboard goes through `Sk75Keyboard` and keeps the vendor's sequence: modes table first, travel tables
   next, commit flag only on the last chunk of the last table, 600 ms wait, read-back verification. Do not change
   packet layouts or ordering without re-verifying on the device (`hidprobe set KeyW 1.2` then `hidprobe dump`).
+* **Vendor code stays out of the repository.** `docs/reverse-engineering/vendor/` is git-ignored (except our
+  `sk75-layout.json`); restore it with `tools/extract-vendor.py`. Describe findings in our own words in
+  `docs/protocol.md`; never commit or paste vendor source.
 * **Protocol facts live in `docs/protocol.md`.** Update the document when code learns something new about the
   firmware. Travel units depend on the firmware version (`TravelScale.ForFirmware`); never hard-code 100.
 * **Only slots with a physical key are patched** when writing; the other 47 table entries are read first and
