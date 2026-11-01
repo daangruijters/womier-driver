@@ -60,8 +60,8 @@ Observed response behaviour:
 | `0xF1` | (receiver) | query | described in the vendor source as "paired keyboard id"; the SK75 TMR's receiver does not answer it |
 
 The vendor application also implements key remapping (`0x0A`/`0x8A`, `0x10`/`0x90`), per-key colour patterns
-(`0x0C`), macros, sleep timers and firmware upgrade. Those are documented in the vendor source kept under
-`reverse-engineering/vendor/` and are intentionally **not** touched by this driver. The calibration commands
+(`0x0C`), macros, sleep timers and firmware upgrade. Those are implemented in the vendor source (restore a local copy with
+`tools/extract-vendor.py`, see `reverse-engineering/README.md`) and are intentionally **not** touched by this driver. The calibration commands
 `0x1C` and `0x1E` are deliberately not implemented at all (§6).
 
 ## 4. Per-key analog tables

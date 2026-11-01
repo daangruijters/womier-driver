@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Regenerates src/WomierDriver.Core/Device/Sk75TmrLayout.Keys.cs.
 
-Inputs (checked in under docs/reverse-engineering/vendor/):
-  * agk75b_ui_info.js   - key geometry of the vendor's "Common81_AGK75B" layout (used by the SK75 TMR)
-  * sk75-layout.json    - decoded factory key matrix of the SK75 (slot -> HID usage)
+Inputs (under docs/reverse-engineering/vendor/):
+  * agk75b_ui_info.js   - key geometry of the vendor's "Common81_AGK75B" layout (used by the SK75 TMR); vendor
+                          code, not checked in: run tools/extract-vendor.py first
+  * sk75-layout.json    - decoded factory key matrix of the SK75 (slot -> HID usage); checked in
 
 Usage:  python tools/gen-layout.py
 """
@@ -65,6 +66,9 @@ def groups(name: str) -> str:
 
 
 def main() -> int:
+    if not UI_INFO.exists():
+        print(f"{UI_INFO} is missing; run python tools/extract-vendor.py first.")
+        return 1
     ui = UI_INFO.read_text(encoding="utf-8")
     geometry = {
         m[0]: (int(m[1]), int(m[2]), int(m[3]), int(m[4]))

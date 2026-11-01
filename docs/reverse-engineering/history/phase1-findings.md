@@ -33,7 +33,7 @@ matches. Any mismatched version in userData is `unlinkSync`'d.
 
 ## Launch sequence (reverse-engineered from index.dd282f03.js)
 
-Function names in the minified source, for reference: `autoConnect = a => { if (Rt) { killIotProcess(); await n(); await t(a); receiveData(); } else return i(); }`.
+In the minified source, `autoConnect` (when the native helper is in use) calls `killIotProcess`, starts and connects the helper and then `receiveData`; otherwise it takes a different path.
 
 1. **`killIotProcess()`** — `tasklist` → split by whitespace → for any
    token containing `iot_driver`, `taskkill /f /t /im <token>`. (Mac:
@@ -77,20 +77,10 @@ $ curl -v -X POST http://127.0.0.1:3814/driver.DriverGrpc/getVersion \
 
 ## gRPC client construction (from the bundle)
 
-```js
-// namespace `Ie`
-const i = new FR({ baseUrl: "http://127.0.0.1:3814" });   // FR = GrpcWebFetchTransport
-e.client = new IR(i);                                      // IR = DriverGrpcClient
-e.changeWirelessLoopStatus = _ => { ... e.client.changeWirelessLoopStatus(g) ... }
-e.sendMsg = (msg, devicePath, checkSumType, dangleDevType) => {
-    const x = Jc.create();        // Jc = sendRawFeature request message type
-    x.msg = _;
-    x.devicePath = h;
-    x.checkSumType = g;
-    x.dangleDevType = k;
-    e.client.sendMsg(x).then(...)
-};
-```
+A module (minified name `Ie`) creates a `GrpcWebFetchTransport` with base URL `http://127.0.0.1:3814` and a
+`DriverGrpcClient` on top of it. Its `sendMsg(msg, devicePath, checkSumType, dangleDevType)` fills a
+`sendRawFeature` request message with those four fields and calls the client's `sendMsg`;
+`changeWirelessLoopStatus` is forwarded the same way.
 
 **Key find**: the high-level wrapper used for every device command is
 `sendMsg(msg, devicePath, checkSumType, dangleDevType)`. That narrows the

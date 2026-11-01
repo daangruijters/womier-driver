@@ -107,21 +107,10 @@ support display/screen/music visualisers; actual RGB config goes through
 
 ## Key contract: `SendMsg`/`ReadMsg` is a thin transport
 
-```proto
-message SendMsg {
-  string devicePath = 1;        // the HID path from Device.path
-  bytes msg = 2;                // opaque HID feature report payload
-  CheckSumType checkSumType = 3; // Bit7, Bit8, or None
-  DangleDevType dangleDevType = 4; // DangleDevTypeNone, Keyboard, Mouse
-}
-
-message ReadMsg {
-  string devicePath = 1;        // only the path is needed to read
-}
-
-message ResSend { string err = 1; }
-message ResRead { string err = 1; bytes msg = 2; }
-```
+* `SendMsg` carries the HID path of the device (field 1), the feature report payload as opaque bytes (2), the
+  checksum type to apply (3: Bit7, Bit8 or none) and the dongle device type (4: none, keyboard or mouse).
+* `ReadMsg` carries only the HID path (field 1).
+* The answers are `ResSend` (an error string) and `ResRead` (an error string and the report bytes).
 
 - `msg` is an **opaque HID feature report**. Its layout is defined in
   `commonKBRY5088.11676525.js` (the ry5088 family packet builders). For

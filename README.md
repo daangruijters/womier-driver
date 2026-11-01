@@ -149,7 +149,7 @@ src/WomierDriver.App     WPF tray application
 src/WomierDriver.Tests   xunit tests with an in-memory fake of the keyboard firmware
 tools/HidProbe           command-line diagnostics
 tools/gen-layout.py      generates the key table from the vendor layout data
-docs/                    protocol, architecture, reverse-engineering notes and vendor sources
+docs/                    protocol, architecture and reverse-engineering notes
 ```
 
 ## Scope and limitations
@@ -174,6 +174,5 @@ Releasing a new version is described in [docs/releasing.md](docs/releasing.md).
 Independent project, not affiliated with Womier. Protocol knowledge comes from reading the vendor's software
 and from measurements on the author's own keyboard.
 
-The driver is released under the [MIT license](LICENSE). The excerpts of the vendor's software under
-`docs/reverse-engineering/vendor` are Womier's and are not covered by it; they are kept only as a reference for
-the protocol.
+The driver is released under the [MIT license](LICENSE). The repository contains no vendor code;
+`tools/extract-vendor.py` copies the vendor sources from an installed WOMIER Driver for local reference.
