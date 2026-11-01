@@ -243,6 +243,47 @@ public sealed class Sk75Keyboard : IDisposable
         return new ApplyResult(false, $"{mismatches} of {written} keys did not read back as written", written, mismatches, stopwatch.Elapsed);
     }
 
+    /// <summary>Reads the backlight setting; <c>null</c> when the keyboard gives no recognisable answer.</summary>
+    public async Task<LightingSettings?> ReadLightingAsync(CancellationToken cancellationToken = default)
+    {
+        var answer = await _channel.ExchangeAsync(Ry5088Packets.GetLighting(), cancellationToken: cancellationToken).ConfigureAwait(false);
+        return Ry5088Packets.TryParseLighting(answer, out var settings) ? settings : null;
+    }
+
+    /// <summary>
+    /// Sets the backlight and verifies it by reading it back. Nothing is sent when the keyboard already shows
+    /// <paramref name="lighting"/>.
+    /// </summary>
+    public async Task<ApplyResult> WriteLightingAsync(LightingSettings lighting, CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var wanted = lighting.Sanitized();
+        var current = await ReadLightingAsync(cancellationToken).ConfigureAwait(false);
+        if (current is not null && current.LooksLike(wanted))
+        {
+            _log.Info($"Lighting already set ({Describe(wanted)}); nothing written.");
+            return new ApplyResult(true, "lighting already set", 0, 0, stopwatch.Elapsed);
+        }
+
+        await _channel.SendAsync(Ry5088Packets.SetLighting(wanted), ChecksumKind.Bit8, cancellationToken).ConfigureAwait(false);
+
+        // The vendor software waits 100 ms after a lighting command.
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        var back = await ReadLightingAsync(cancellationToken).ConfigureAwait(false);
+        stopwatch.Stop();
+        if (back is not null && back.LooksLike(wanted))
+        {
+            _log.Info($"Lighting set to {Describe(wanted)} in {stopwatch.ElapsedMilliseconds} ms, verified.");
+            return new ApplyResult(true, "lighting set", 0, 0, stopwatch.Elapsed);
+        }
+
+        _log.Warn($"Lighting set to {Describe(wanted)} but the keyboard reports {(back is null ? "nothing" : Describe(back))}.");
+        return new ApplyResult(false, "lighting did not read back as written", 0, 0, stopwatch.Elapsed);
+    }
+
+    private static string Describe(LightingSettings s)
+        => $"{s.Effect}, brightness {s.Brightness}, speed {s.Speed}, {(s.Rainbow ? "rainbow" : s.Color.ToString())}, option {s.Option}";
+
     /// <summary>
     /// Switches the firmware's live travel reports (input reports on the vendor input collection) on or off with
     /// <c>1B 01</c> / <c>1B 00</c>. The firmware does not answer, so this only waits briefly like the vendor software.

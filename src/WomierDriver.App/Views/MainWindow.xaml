@@ -238,7 +238,7 @@
               </ScrollViewer>
             </Border>
 
-            <!-- Games -->
+            <!-- Games and lighting -->
             <Border Grid.Column="2" Style="{StaticResource CardStyle}">
               <Grid>
                 <Grid.RowDefinitions>
@@ -247,10 +247,14 @@
                   <RowDefinition Height="*" />
                   <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="Games" Style="{StaticResource SectionTitleStyle}" />
-                <TextBlock Grid.Row="1" Style="{StaticResource SecondaryCaptionStyle}" Text="This profile is applied while any of these processes is running." />
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                  <RadioButton Content="Games" IsChecked="True" Style="{StaticResource TabHeaderStyle}" />
+                  <RadioButton Content="Lighting" IsChecked="{Binding IsLightingTabSelected}" Style="{StaticResource TabHeaderStyle}" />
+                </StackPanel>
+                <TextBlock Grid.Row="1" Margin="0,6,0,0" Style="{StaticResource SecondaryCaptionStyle}" Text="This profile is applied while any of these processes is running."
+                           Visibility="{Binding IsLightingTabSelected, Converter={StaticResource InverseBoolToVisibility}}" />
 
-                <Grid Grid.Row="2" Margin="0,10,0,0">
+                <Grid Grid.Row="2" Margin="0,10,0,0" Visibility="{Binding IsLightingTabSelected, Converter={StaticResource InverseBoolToVisibility}}">
                   <TextBlock Style="{StaticResource SecondaryBodyStyle}" VerticalAlignment="Top" Margin="0,4,0,0"
                              Visibility="{Binding SelectedProfile.HasGames, Converter={StaticResource InverseBoolToVisibility}}"
                              Text="No games yet. Add the game's process name (for example bf6.exe) or pick it from the running processes." />
@@ -284,7 +288,7 @@
                   </ItemsControl>
                 </Grid>
 
-                <StackPanel Grid.Row="3" Margin="0,10,0,0">
+                <StackPanel Grid.Row="3" Margin="0,10,0,0" Visibility="{Binding IsLightingTabSelected, Converter={StaticResource InverseBoolToVisibility}}">
                   <Grid>
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -295,6 +299,80 @@
                   </Grid>
                   <Button Content="Pick from running processes…" Command="{Binding PickRunningProcessCommand}" Margin="0,8,0,0" HorizontalAlignment="Stretch" />
                 </StackPanel>
+
+                <!-- Lighting -->
+                <ScrollViewer Grid.Row="1" Grid.RowSpan="3" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,12,0"
+                              Visibility="{Binding IsLightingTabSelected, Converter={StaticResource BoolToVisibility}}">
+                  <StackPanel DataContext="{Binding Lighting}">
+                    <CheckBox Content="Set the lighting with this profile" IsChecked="{Binding IsEnabled}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" />
+                    <TextBlock Style="{StaticResource SecondaryCaptionStyle}" Margin="0,4,0,0"
+                               Visibility="{Binding IsEnabled, Converter={StaticResource BoolToVisibility}}"
+                               Text="Written to the keyboard while this profile is active. The keyboard's Fn shortcuts still change it until the next profile switch." />
+                    <TextBlock Style="{StaticResource SecondaryCaptionStyle}" Margin="0,4,0,0"
+                               Visibility="{Binding IsEnabled, Converter={StaticResource InverseBoolToVisibility}}"
+                               Text="Off: the keyboard keeps its current lighting. Switch on to start from what the keyboard shows now." />
+
+                    <StackPanel Margin="0,14,0,0" Visibility="{Binding IsEnabled, Converter={StaticResource BoolToVisibility}}">
+                      <TextBlock Text="Effect" Style="{StaticResource SecondaryCaptionStyle}" />
+                      <ComboBox ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect}" DisplayMemberPath="Name"
+                                HorizontalAlignment="Stretch" Margin="0,4,0,0" AutomationProperties.Name="Effect" />
+                      <TextBlock Text="The five patterns are drawn in the vendor software and stored on the keyboard." Style="{StaticResource SecondaryCaptionStyle}" Margin="0,4,0,0"
+                                 Visibility="{Binding IsCustomPattern, Converter={StaticResource BoolToVisibility}}" />
+
+                      <StackPanel Margin="0,12,0,0" Visibility="{Binding HasOptions, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding OptionLabel}" Style="{StaticResource SecondaryCaptionStyle}" />
+                        <ComboBox ItemsSource="{Binding Options}" SelectedIndex="{Binding OptionIndex}" HorizontalAlignment="Stretch" Margin="0,4,0,0"
+                                  AutomationProperties.Name="{Binding OptionLabel}" />
+                      </StackPanel>
+
+                      <Grid Margin="0,12,0,0">
+                        <TextBlock Text="Brightness" Style="{StaticResource SecondaryCaptionStyle}" />
+                        <TextBlock Text="{Binding Brightness, StringFormat={}{0:0} / 4}" Style="{StaticResource SecondaryCaptionStyle}" HorizontalAlignment="Right" />
+                      </Grid>
+                      <Slider Value="{Binding Brightness}" Minimum="0" Maximum="4" TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
+                              Margin="0,2,0,0" AutomationProperties.Name="Brightness" />
+
+                      <StackPanel Visibility="{Binding HasSpeed, Converter={StaticResource BoolToVisibility}}">
+                        <Grid Margin="0,10,0,0">
+                          <TextBlock Text="Speed" Style="{StaticResource SecondaryCaptionStyle}" />
+                          <TextBlock Text="{Binding Speed, StringFormat={}{0:0} / 4}" Style="{StaticResource SecondaryCaptionStyle}" HorizontalAlignment="Right" />
+                        </Grid>
+                        <Slider Value="{Binding Speed}" Minimum="0" Maximum="4" TickFrequency="1" IsSnapToTickEnabled="True" TickPlacement="BottomRight"
+                                Margin="0,2,0,0" AutomationProperties.Name="Speed" />
+                      </StackPanel>
+
+                      <StackPanel Margin="0,12,0,0" Visibility="{Binding HasColor, Converter={StaticResource BoolToVisibility}}">
+                        <CheckBox Content="All colours" IsChecked="{Binding Rainbow}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch"
+                                  ToolTip="Cycle through all colours instead of using one" />
+                        <StackPanel Margin="0,10,0,0" Visibility="{Binding ShowColorPicker, Converter={StaticResource BoolToVisibility}}">
+                          <ItemsControl ItemsSource="{Binding Swatches}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <WrapPanel />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Button Style="{StaticResource SwatchButtonStyle}" Background="{Binding Brush}" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}"
+                                        Command="{Binding DataContext.PickColorCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="Auto" />
+                              <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="32" Height="32" CornerRadius="6" Background="{Binding ColorBrush}" Margin="0,0,8,0"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" />
+                            <TextBox Grid.Column="1" Text="{Binding ColorText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Colour as #RRGGBB"
+                                     AutomationProperties.Name="Colour" />
+                          </Grid>
+                        </StackPanel>
+                      </StackPanel>
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
               </Grid>
             </Border>
           </Grid>

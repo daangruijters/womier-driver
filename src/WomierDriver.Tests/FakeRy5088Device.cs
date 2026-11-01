@@ -60,6 +60,11 @@ public sealed class FakeRy5088Device : IFeatureChannel
     /// <summary>Whether the firmware's live travel reports are switched on (<see cref="Opcode.SetMagnetismReport"/>).</summary>
     public bool LiveReporting { get; private set; }
 
+    /// <summary>The backlight packet bytes 1..7 (<see cref="Opcode.SetLighting"/>) as the firmware stores them.</summary>
+    public byte[] Lighting { get; } = [0x01, 0x02, 0x04, 0x07, 0xFA, 0xFF, 0xFA];
+
+    public int LightingWrites { get; private set; }
+
     public ushort[] U16(MagnetismStream stream) => Ry5088Packets.DecodeU16Table(_tables[stream]);
 
     public byte[] U8(MagnetismStream stream) => _tables[stream];
@@ -128,6 +133,19 @@ public sealed class FakeRy5088Device : IFeatureChannel
             case Opcode.GetProfile:
                 response[0] = Opcode.GetProfile;
                 response[1] = OnboardProfile;
+                return response;
+            case Opcode.SetLighting:
+                if (!IgnoreWrites)
+                {
+                    Array.Copy(packet, 1, Lighting, 0, Lighting.Length);
+                    LightingWrites++;
+                }
+
+                Array.Copy(packet, response, 9);
+                return response;
+            case Opcode.GetLighting:
+                response[0] = Opcode.GetLighting;
+                Array.Copy(Lighting, 0, response, 1, Lighting.Length);
                 return response;
             case Opcode.SetMagnetismReport:
                 LiveReporting = packet[1] == 1;

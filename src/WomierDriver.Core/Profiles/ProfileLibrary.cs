@@ -73,6 +73,8 @@ public sealed class ProfileLibrary
             {
                 profile.Keys[slot] = profile.Keys[slot].Sanitized();
             }
+
+            profile.Lighting = profile.Lighting?.Sanitized();
         }
 
         var defaults = Profiles.Where(p => p.IsDefault).ToList();

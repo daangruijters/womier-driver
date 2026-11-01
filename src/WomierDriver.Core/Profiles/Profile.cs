@@ -23,6 +23,9 @@ public sealed class Profile
     /// <summary>Settings per key-matrix slot. Keys without an entry fall back to <see cref="KeySettings.VendorDefault"/>.</summary>
     public Dictionary<int, KeySettings> Keys { get; set; } = [];
 
+    /// <summary>Backlight written together with the keys; <c>null</c> leaves the keyboard's lighting as it is.</summary>
+    public LightingSettings? Lighting { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -93,6 +96,7 @@ public sealed class Profile
         Name = name,
         Games = [.. Games],
         Keys = new Dictionary<int, KeySettings>(Keys),
+        Lighting = Lighting,
     };
 
     /// <summary>Stable fingerprint of the key settings, used to skip redundant writes to the keyboard.</summary>
