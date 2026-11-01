@@ -253,6 +253,11 @@ One packet sets the effect of the whole keyboard, one reads it back (vendor `set
 covers bytes 0..7 and sits in byte 8. Brightness and speed run from 0 to 4; the speed byte counts down (0 = fastest).
 The vendor software waits 100 ms after the command.
 
+Verified on the keyboard (firmware 3.08, over the 2.4 GHz receiver): breathing in red, a rainbow wave to the left and
+white always-on were each written and read back byte for byte, and the original setting was restored. One write with
+the 100 ms wait and the read-back takes about 150 ms over the receiver. The answer to `87` echoes all eight bytes as
+written, including the colour bytes in rainbow mode (the firmware stores them but ignores them).
+
 | Colour mode (low nibble of byte 4) | Meaning |
 |---|---|
 | 7 | the colour in bytes 5..7 |
