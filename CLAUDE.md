@@ -32,9 +32,10 @@ dotnet test src/WomierDriver.Tests                  # unit tests (no hardware ne
 dotnet run --project src/WomierDriver.App           # run the driver (add -- --minimized to start in the tray)
 dotnet run --project tools/HidProbe -- dump         # read every key's current settings from the keyboard
 dotnet run --project tools/HidProbe -- live 30      # print the firmware's live travel reports for 30 s
-dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish   # portable single exe (releases)
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish   # portable single exe (the release workflow packs it)
 dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish  # small, needs the runtime
 python tools/gen-layout.py                          # regenerate the key table after changing the vendor data
+git tag -a v0.2.0 -m "notes"; git push origin v0.2.0   # release: CI packs with Velopack and publishes (docs/releasing.md)
 ```
 
 Testing against a redirected data folder: `$env:WOMIER_DRIVER_DATA = "C:\temp\womier"` before starting the app. Such
@@ -69,6 +70,11 @@ keyboard, so do not let them apply different profiles at the same time.
 * **UI conventions.** WPF Fluent theme (`ThemeMode="System"`); use the theme's dynamic brushes (`TextFillColor…`,
   `CardBackgroundFillColor…`, `AccentFillColor…`) rather than hard-coded colours so dark mode keeps working.
   Keep the UI simple: one window, no dialogs beyond confirmations and the process picker.
+* **Updates.** Releases are built only by `.github/workflows/release.yml` (Velopack `vpk pack` + `vpk upload github`);
+  keep `VPK_VERSION` there equal to the `Velopack` package version. An update is installed only when the user picks
+  *Restart to update* (or on the next start), never while the engine may be writing. `Program.Main` must keep
+  calling `VelopackApp.Build()…Run()` first. Test the update flow with locally packed releases and
+  `WOMIER_DRIVER_UPDATE_SOURCE`; installing rewrites the real autostart entry, so back it up first.
 * **Style.** File-scoped namespaces, records for immutable data, `sealed` by default, nullable enabled,
   XML doc comments on public Core APIs. No new third-party UI dependencies.
 

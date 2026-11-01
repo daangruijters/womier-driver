@@ -1,0 +1,73 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, pack (Velopack) and publish a GitHub release. The message of an annotated tag
+# (git tag -a v0.2.0 -m "...") becomes the release notes. Installed copies pick the release up by themselves.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  # Keep equal to the Velopack package version in src/WomierDriver.App/WomierDriver.App.csproj.
+  VPK_VERSION: 1.2.161
+  PACKAGE_ID: WomierDriver
+  WINGET_ID: DaanGruijters.WomierDriver
+
+jobs:
+  release:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Version and notes from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          git tag -l --format='%(contents)' '${{ github.ref_name }}' | Set-Content release-notes.md
+      - name: Test
+        run: dotnet test src/WomierDriver.Tests -c Release
+      - name: Publish
+        run: dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -p:Version=${{ steps.version.outputs.version }} -o publish
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+      - name: Download the previous release (for delta updates)
+        run: vpk download github --repoUrl ${{ github.server_url }}/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} -o releases
+      - name: Pack
+        shell: pwsh
+        run: |
+          $notes = if ((Get-Content release-notes.md -Raw).Trim()) { @('--releaseNotes', 'release-notes.md') } else { @() }
+          vpk pack -u $env:PACKAGE_ID -v ${{ steps.version.outputs.version }} -p publish -e WomierDriver.exe -o releases `
+            --packTitle "Womier SK75 TMR Driver" --packAuthors "Daan Gruijters" `
+            -i src/WomierDriver.App/Assets/app.ico --shortcuts StartMenuRoot @notes
+      - name: Upload to the GitHub release
+        run: >-
+          vpk upload github --repoUrl ${{ github.server_url }}/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+          -o releases --publish --merge --tag ${{ github.ref_name }}
+          --releaseName "Womier SK75 TMR driver ${{ github.ref_name }}"
+
+  winget:
+    # Updates the winget package once it exists (the first submission is manual, see docs/releasing.md). Needs a
+    # WINGET_TOKEN secret: a classic personal access token with the public_repo scope.
+    needs: release
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Submit the new version to winget-pkgs
+        if: env.WINGET_TOKEN != ''
+        shell: pwsh
+        run: |
+          $version = '${{ needs.release.outputs.version }}'
+          $url = "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/$env:PACKAGE_ID-win-Setup.exe"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update $env:WINGET_ID --version $version --urls $url --submit --token $env:WINGET_TOKEN

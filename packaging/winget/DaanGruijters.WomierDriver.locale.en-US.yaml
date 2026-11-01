@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: DaanGruijters.WomierDriver
+PackageVersion: 0.2.0
+PackageLocale: en-US
+Publisher: Daan Gruijters
+PublisherUrl: https://github.com/daangruijters
+PublisherSupportUrl: https://github.com/daangruijters/womier-driver/issues
+Author: Daan Gruijters
+PackageName: Womier SK75 TMR Driver
+PackageUrl: https://github.com/daangruijters/womier-driver
+License: MIT
+LicenseUrl: https://github.com/daangruijters/womier-driver/blob/main/LICENSE
+ShortDescription: Unofficial tray driver for the Womier SK75 TMR keyboard with per-key actuation, rapid trigger and lighting profiles that follow your games.
+Description: |-
+  An unofficial replacement for the vendor's driver app for the Womier SK75 TMR magnetic keyboard. It sets per-key
+  actuation points, rapid trigger and the backlight, and switches between profiles automatically when a game
+  starts. It talks to the keyboard directly over USB or the 2.4 GHz receiver and updates itself from the GitHub
+  releases. Not affiliated with Womier.
+Moniker: womier-driver
+Tags:
+- keyboard
+- womier
+- rapid-trigger
+- magnetic-switches
+- tray
+ReleaseNotesUrl: https://github.com/daangruijters/womier-driver/releases/tag/v0.2.0
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

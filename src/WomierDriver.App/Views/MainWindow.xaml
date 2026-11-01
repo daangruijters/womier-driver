@@ -30,6 +30,10 @@
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="Womier SK75 TMR" Style="{StaticResource BodyStrongTextBlockStyle}" />
             <TextBlock Text="{Binding VersionText}" Style="{StaticResource SecondaryCaptionStyle}" />
+            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" ToolTip="{Binding UpdateToolTip}"
+                       Visibility="{Binding UpdatesSupported, Converter={StaticResource BoolToVisibility}}">
+              <Hyperlink Command="{Binding UpdateCommand}"><Run Text="{Binding UpdateText, Mode=OneWay}" /></Hyperlink>
+            </TextBlock>
           </StackPanel>
         </StackPanel>
 
@@ -90,6 +94,9 @@
         <CheckBox Content="Notify when battery is low" IsChecked="{Binding NotifyOnLowBattery}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6"
                   ToolTip="Over 2.4 GHz: a notification at 20 % and again at 10 % battery" />
         <CheckBox Content="Start with Windows" IsChecked="{Binding StartWithWindows}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6" />
+        <CheckBox Content="Check for updates" IsChecked="{Binding CheckForUpdates}" Style="{StaticResource ToggleSwitchStyle}" HorizontalAlignment="Stretch" Margin="0,6"
+                  ToolTip="Look for a new release every few hours and download it; it is installed when you restart the driver"
+                  Visibility="{Binding UpdatesSupported, Converter={StaticResource BoolToVisibility}}" />
       </StackPanel>
     </Grid>
 

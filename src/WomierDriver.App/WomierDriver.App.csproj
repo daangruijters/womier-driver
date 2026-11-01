@@ -8,18 +8,21 @@
     <AssemblyName>WomierDriver</AssemblyName>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Program.Main runs the Velopack hooks before WPF starts. -->
+    <StartupObject>WomierDriver.App.Program</StartupObject>
     <!-- WPF0001: the Fluent ThemeMode API is still marked experimental. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <Description>System-tray driver and configuration utility for the Womier SK75 TMR keyboard.</Description>
-    <!-- Publishing produces one executable; published self-contained it is the portable build the releases ship. -->
+    <!-- Publishing produces one executable. Releases pack the self-contained publish output with Velopack
+         (docs/releasing.md); it is left uncompressed so the delta updates between versions stay small. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile Condition="'$(SelfContained)' == 'true'">true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>

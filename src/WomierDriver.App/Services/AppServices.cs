@@ -19,6 +19,7 @@ public sealed class AppServices
         Engine = engine;
         Log = log;
         Dispatcher = dispatcher;
+        Updates = new UpdateService(engine.Settings, log, dispatcher);
         _saveTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromMilliseconds(500) };
         _saveTimer.Tick += (_, _) =>
         {
@@ -36,6 +37,8 @@ public sealed class AppServices
     public FileLogger Log { get; }
 
     public Dispatcher Dispatcher { get; }
+
+    public UpdateService Updates { get; }
 
     /// <summary>Persists profiles.json shortly (debounced so slider drags do not hammer the disk).</summary>
     public void SaveLibrarySoon()
@@ -119,12 +122,37 @@ public static class AutostartManager
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);
         if (enabled)
         {
-            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the executable path.");
-            key.SetValue(ValueName, $"\"{exe}\" --minimized");
+            key.SetValue(ValueName, $"\"{CurrentExecutable()}\" --minimized");
         }
         else
         {
             key.DeleteValue(ValueName, throwOnMissingValue: false);
         }
     }
+
+    /// <summary>
+    /// Installer hook: an existing entry (for example from the portable build) now starts the installed copy.
+    /// Without an entry nothing changes; autostart stays the user's choice.
+    /// </summary>
+    public static void PointAtThisExecutable()
+    {
+        if (IsEnabled())
+        {
+            SetEnabled(true);
+        }
+    }
+
+    /// <summary>Uninstaller hook: removes the entry only when it starts this copy, not another build.</summary>
+    public static void RemoveIfThisExecutable()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        if (key?.GetValue(ValueName) is string command
+            && command.Contains(CurrentExecutable(), StringComparison.OrdinalIgnoreCase))
+        {
+            key.DeleteValue(ValueName, throwOnMissingValue: false);
+        }
+    }
+
+    private static string CurrentExecutable() =>
+        Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the executable path.");
 }

@@ -107,6 +107,12 @@ public sealed partial class MainViewModel : ObservableObject
         _engine.LiveTravel += OnLiveTravel;
 
         _engine.StateChanged += (_, _) => services.Dispatcher.BeginInvoke(RefreshEngineState);
+        services.Updates.StatusChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(UpdateText));
+            OnPropertyChanged(nameof(UpdateToolTip));
+            UpdateCommand.NotifyCanExecuteChanged();
+        };
         ReloadProfiles();
         RefreshEngineState();
     }
@@ -167,6 +173,38 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             _engine.MutateSettings(s => s.NotifyOnLowBattery = value);
+            _services.SaveSettingsSoon();
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>False for builds that are not installed (dotnet run, a plain publish): they hide the update controls.</summary>
+    public bool UpdatesSupported => _services.Updates.Status != UpdateStatus.Unsupported;
+
+    /// <summary>The update line under the version: what the updater is doing and what clicking it does.</summary>
+    public string UpdateText => _services.Updates.Status switch
+    {
+        UpdateStatus.Checking => "Checking for updates…",
+        UpdateStatus.Downloading => $"Downloading {_services.Updates.NewVersion}…",
+        UpdateStatus.UpToDate => "Up to date · check again",
+        UpdateStatus.Failed => "Update check failed · retry",
+        UpdateStatus.Ready => $"Restart to update to {_services.Updates.NewVersion}",
+        _ => "Check for updates",
+    };
+
+    public string? UpdateToolTip => _services.Updates.LastError;
+
+    public bool CheckForUpdates
+    {
+        get => _engine.Settings.CheckForUpdates;
+        set
+        {
+            if (value == _engine.Settings.CheckForUpdates)
+            {
+                return;
+            }
+
+            _engine.MutateSettings(s => s.CheckForUpdates = value);
             _services.SaveSettingsSoon();
             OnPropertyChanged();
         }
@@ -346,6 +384,22 @@ public sealed partial class MainViewModel : ObservableObject
         RefreshLiveStatus();
         LoadSelectionIntoEditor();
         NewGameText = string.Empty;
+    }
+
+    private bool CanUpdate() => !_services.Updates.IsBusy;
+
+    /// <summary>Installs a downloaded update (restarting the driver), otherwise checks for one.</summary>
+    [RelayCommand(CanExecute = nameof(CanUpdate))]
+    private async Task UpdateAsync()
+    {
+        if (_services.Updates.Status == UpdateStatus.Ready)
+        {
+            _services.Updates.RestartToUpdate();
+        }
+        else
+        {
+            await _services.Updates.CheckAsync();
+        }
     }
 
     [RelayCommand]

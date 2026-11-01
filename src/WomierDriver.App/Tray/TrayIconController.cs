@@ -45,6 +45,7 @@ public sealed class TrayIconController : IDisposable
 
         _services.Engine.StateChanged += (_, _) => _services.Dispatcher.BeginInvoke(Refresh);
         _services.Engine.ProfileApplied += (_, e) => _services.Dispatcher.BeginInvoke(() => OnProfileApplied(e));
+        _services.Updates.StatusChanged += (_, _) => OnUpdateStatusChanged();
         Refresh();
     }
 
@@ -180,12 +181,32 @@ public sealed class TrayIconController : IDisposable
         }
 
         menu.Items.Add(new Separator());
+        if (_services.Updates.Status == UpdateStatus.Ready)
+        {
+            var update = new MenuItem { Header = $"Restart to update to {_services.Updates.NewVersion}" };
+            update.Click += (_, _) => _services.Updates.RestartToUpdate();
+            menu.Items.Add(update);
+        }
+
         var open = new MenuItem { Header = "Open Womier SK75 TMR…" };
         open.Click += (_, _) => _showWindow();
         menu.Items.Add(open);
         var exit = new MenuItem { Header = "Exit" };
         exit.Click += (_, _) => _exit();
         menu.Items.Add(exit);
+    }
+
+    private void OnUpdateStatusChanged()
+    {
+        if (_icon.ContextMenu is { IsOpen: false })
+        {
+            RebuildMenu();
+        }
+
+        if (_services.Updates.Status == UpdateStatus.Ready)
+        {
+            Notify($"Update {_services.Updates.NewVersion} ready", "Choose \"Restart to update\" in the tray menu, or it is installed the next time the driver starts.");
+        }
     }
 
     private void OnProfileApplied(ProfileAppliedEventArgs e)
