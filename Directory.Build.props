@@ -7,7 +7,7 @@
     <Authors>Daan Gruijters</Authors>
     <Product>Womier SK75 TMR Driver</Product>
     <Copyright>Copyright © Daan Gruijters</Copyright>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 </Project>

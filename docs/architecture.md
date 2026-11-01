@@ -96,11 +96,21 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
 
 ## App
 
+* `Program` – entry point (`StartupObject`). Runs `VelopackApp` before WPF starts: it applies an update that was
+  downloaded but not installed yet, and handles the installer hooks (after install: an existing autostart entry is
+  pointed at the installed exe; before uninstall: the entry is removed if it starts this copy).
 * `App` – single instance via a named mutex; a second launch signals a named event that brings the existing
   window to the front. `--minimized` starts in the tray (used by the autostart entry).
 * `TrayIconController` – H.NotifyIcon `TaskbarIcon`; the context menu is rebuilt from engine state each time
   it opens: *Automatic (follow games)*, one entry per profile, *Open…*, *Exit*. Left click opens the window.
-  Profile switches caused by games raise a toast when enabled.
+  Profile switches caused by games raise a toast when enabled. While a downloaded update waits, the menu has
+  *Restart to update to x.y.z*.
+* `UpdateService` – Velopack `UpdateManager` on the GitHub releases, active only in an installed copy (not for
+  `dotnet run` or a plain publish). Checks a minute after start and every six hours (setting *Check for updates*),
+  downloads in the background and installs only when the user picks *Restart to update*: the updater waits for
+  the driver to exit through the normal shutdown path (`ExitRequested` → `App.ExitApplication`), so the engine
+  releases the keyboard before files are swapped. `WOMIER_DRIVER_UPDATE_SOURCE=<folder>` points it at locally
+  packed releases for testing.
 * `MainViewModel` – profile list, 81 `KeyViewModel`s for the canvas, the `SelectionEditorViewModel` that edits
   all selected keys at once, game rules and the `LightingEditorViewModel` (tabs *Games* / *Lighting* on one card),
   settings toggles. Switching a profile's lighting on starts from what the keyboard shows (`ReadLightingAsync`). Edits are saved (debounced 0.5 s) and pushed to
@@ -129,6 +139,7 @@ WomierDriver.App (WPF, net10.0-windows)          WomierDriver.Core (net10.0)
 | `%APPDATA%\WomierDriver\settings.json` | app settings |
 | `%APPDATA%\WomierDriver\driver.log` | rolling log (1 MB) |
 | `HKCU\…\Run\WomierDriver` | autostart entry (`WomierDriver.exe --minimized`) |
+| `%LOCALAPPDATA%\WomierDriver\current\` | installed program (Velopack; `Update.exe` and downloaded packages one level up) |
 
 Set `WOMIER_DRIVER_DATA=<folder>` to redirect the data folder (useful for testing). A redirected instance uses
 mutex and event names suffixed with a hash of that folder, so it runs side by side with the normal driver.

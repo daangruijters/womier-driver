@@ -46,17 +46,27 @@ switches profiles automatically when a game is running.
   predictable results let only one of them start with Windows, and close the vendor application while using the
   2.4 GHz receiver (both relay their commands through the receiver's single answer buffer).
 
-## Download and run (no installation)
+## Install
 
-1. Download `WomierDriver-<version>-win-x64.zip` from the [Releases](../../releases) page.
-2. Extract it anywhere, for example `C:\Tools\WomierDriver`, and start `WomierDriver.exe`. It is one
-   self-contained executable: no installer and no runtime to install. The driver only writes to
-   `%APPDATA%\WomierDriver` (profiles, settings, log) and, if you enable it, the autostart value in the registry.
-3. Windows SmartScreen may warn because the file is not code-signed: choose *More info* → *Run anyway*.
-4. Enable *Start with Windows* in the sidebar once you are happy. The autostart entry points at the folder you
-   chose, so re-enable the toggle after moving the executable.
+Download `WomierDriver-win-Setup.exe` from the [Releases](../../releases) page and run it. It installs for your
+user only (no administrator rights) into `%LOCALAPPDATA%\WomierDriver`, adds a Start menu entry and starts the
+driver. Windows SmartScreen may warn because the file is not code-signed: choose *More info* → *Run anyway*.
+Enable *Start with Windows* in the sidebar once you are happy.
 
-To update, replace the executable with the one from the newer release; profiles and settings stay in `%APPDATA%`.
+Once the package is accepted in the Windows Package Manager:
+
+```powershell
+winget install DaanGruijters.WomierDriver
+```
+
+**Updates** install themselves: the driver looks for a new release a minute after it starts and then every few
+hours, downloads it in the background and shows *Restart to update to x.y.z* under the version in the window and
+in the tray menu. An update you do not install that way is applied the next time the driver starts. Switch it
+off with *Check for updates* in the sidebar. Profiles and settings stay in `%APPDATA%\WomierDriver`; uninstalling
+(Settings → Apps) leaves them there too.
+
+Without installing: `WomierDriver-win-Portable.zip` holds the same driver; extract it anywhere and start
+`WomierDriver.exe`. It updates itself in its own folder as well.
 
 ## Build and run
 
@@ -72,7 +82,7 @@ Publish a folder you can copy anywhere (the app then lives wherever you put it; 
 in the sidebar to register that location):
 
 ```powershell
-dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish    # portable single exe (what the releases ship)
+dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained true -o publish    # portable single exe (packed into the releases)
 dotnet publish src/WomierDriver.App -c Release -r win-x64 --self-contained false -o publish   # small, needs the .NET 10 Desktop Runtime
 ```
 
@@ -157,7 +167,13 @@ docs/                    protocol, architecture, reverse-engineering notes and v
 * Over 2.4 GHz every command travels through the receiver, so a profile switch takes about 1.7 s instead of
   1 s, and a sleeping keyboard only gets its settings after the next key press.
 
+Releasing a new version is described in [docs/releasing.md](docs/releasing.md).
+
 ## Credits and license
 
 Independent project, not affiliated with Womier. Protocol knowledge comes from reading the vendor's software
 and from measurements on the author's own keyboard.
+
+The driver is released under the [MIT license](LICENSE). The excerpts of the vendor's software under
+`docs/reverse-engineering/vendor` are Womier's and are not covered by it; they are kept only as a reference for
+the protocol.

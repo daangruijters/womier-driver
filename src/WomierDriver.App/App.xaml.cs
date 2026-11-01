@@ -83,6 +83,7 @@ public partial class App : Application
 
         var engine = new DriverEngine(library, settings, log);
         _services = new AppServices(engine, log, Dispatcher);
+        _services.Updates.ExitRequested += ExitApplication;
         _mainViewModel = new MainViewModel(_services);
         _tray = new TrayIconController(_services, ShowMainWindow, ExitApplication);
 

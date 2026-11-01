@@ -15,6 +15,9 @@ public sealed class AppSettings
     /// <summary>Show a tray notification when the keyboard battery runs low (2.4 GHz only; the cable charges it).</summary>
     public bool NotifyOnLowBattery { get; set; } = true;
 
+    /// <summary>Look for a new release now and then and download it in the background (installed builds only).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     /// <summary>How often the running processes are sampled.</summary>
     public int ProcessPollIntervalMs { get; set; } = 2000;
 }
