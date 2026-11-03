@@ -22,6 +22,6 @@ AppsAndFeaturesEntries:
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/daangruijters/womier-driver/releases/download/v0.2.0/WomierDriver-win-Setup.exe
-  InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+  InstallerSha256: 5BB95A1DDFA6A351A4B7AB46F666AD1323C9A5C4FE70F47C660909FD7E3D3A18
 ManifestType: installer
 ManifestVersion: 1.10.0

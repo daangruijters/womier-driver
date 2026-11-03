@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.2.0 to build, pack (Velopack) and publish a GitHub release. The message of an annotated tag
-# (git tag -a v0.2.0 -m "...") becomes the release notes. Installed copies pick the release up by themselves.
+# (git tag -a v0.2.0 --cleanup=verbatim -F notes.md) becomes the release notes. Installed copies pick the release up by themselves.
 on:
   push:
     tags: ['v*']
@@ -33,6 +33,8 @@ jobs:
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
           "version=$version" >> $env:GITHUB_OUTPUT
+          # actions/checkout replaces the annotated tag with a lightweight one; fetch the real tag for its message.
+          git fetch --force origin 'refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}'
           git tag -l --format='%(contents)' '${{ github.ref_name }}' | Set-Content release-notes.md
       - name: Test
         run: dotnet test src/WomierDriver.Tests -c Release

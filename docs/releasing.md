@@ -7,10 +7,13 @@ Releases are built by GitHub Actions ([release.yml](../.github/workflows/release
 
 1. Set `<Version>` in `Directory.Build.props` to the new version and merge to `main` (the tag decides the version
    of the release; the props file only keeps local builds honest).
-2. Tag `main` with an annotated tag. Its message becomes the release notes:
+2. Write the release notes in Markdown to a file outside the repository and tag `main` with it. Without
+   `--cleanup=verbatim` git drops every line starting with `#`, so the headings would disappear:
 
    ```powershell
-   git tag -a v0.3.0 -m "Short list of what changed"
+   git fetch origin
+   git tag -a v0.3.0 --cleanup=verbatim -F $env:TEMP
+otes-0.3.0.md origin/main
    git push origin v0.3.0
    ```
 
@@ -55,10 +58,10 @@ C:\temp\Setup-0.9.0.exe --silent
 
 The package identifier is `DaanGruijters.WomierDriver`. Anyone may submit a package; there is no publisher account.
 
-**First submission (once, by hand)** – after the first Velopack release (v0.2.0) is published:
+**First submission (once, by hand)** – the manifests in [packaging/winget](../packaging/winget) are filled in
+for v0.2.0.
 
-1. Fill in `InstallerSha256` in [packaging/winget](../packaging/winget) (and the version and URLs if it is not
-   0.2.0):
+1. For another version, update the version, the URLs and `InstallerSha256`:
 
    ```powershell
    Invoke-WebRequest https://github.com/daangruijters/womier-driver/releases/download/v0.2.0/WomierDriver-win-Setup.exe -OutFile Setup.exe
